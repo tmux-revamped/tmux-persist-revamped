@@ -1,90 +1,101 @@
 <div align="center">
 
-<h1>tmux-plugin-template</h1>
+<h1>tmux-persist-revamped</h1>
 
-**A template for building non-blocking tmux status plugins.**
-
-[![Tests](https://github.com/gufranco/tmux-plugin-template/actions/workflows/tests.yml/badge.svg)](https://github.com/gufranco/tmux-plugin-template/actions/workflows/tests.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<strong>Save, auto-save, and restore your whole tmux environment, one plugin, no status-line tricks.</strong>
 
 </div>
 
-**54** tests · **95%+** coverage · **2** platforms · **0** temp files
+One plugin that captures every session, window, pane, layout, and working
+directory, optionally replays the program each pane was running, and brings it all
+back after a reboot. It is a single rewrite of the save/restore engine and the
+auto-save automation that usually ship as two separate plugins.
 
-This is the shared foundation for the `tmux-*-revamped` status plugins. It provides an async, temp-file-free cache that keeps all state in tmux server user-options, so the status bar reads a cached value instantly while a detached worker recomputes stale values in the background. It also ships platform helpers, a bats test harness that runs on bash 3.2, kcov coverage tooling, and CI.
+## How it works
 
-<table>
-<tr>
-<td width="50%">
+A save walks the live server through tmux format strings, writes each window and
+pane as one escaped record, and renames the result over the previous save in a
+single step, so an interrupted save never leaves a half-written file. Restore reads
+that file back, recreates the session tree, returns each pane to its directory, and
+replays an allow-listed program.
 
-### Non-blocking cache
+Auto-save runs from a small detached worker that ticks on a timer and asks the
+plugin whether a save is due. It never writes into `status-right`, so your status
+line stays yours and saving does not depend on how often the bar refreshes. After a
+restore on server start, a short grace window holds auto-save off so it cannot
+overwrite what was just brought back.
 
-The hot path reads a cached tmux user-option and returns at once; a detached worker recomputes the value when it goes stale.
+The save file uses an escaped field format read under a fixed locale, so an empty
+pane title, a tab inside a value, or a path with spaces round-trips without
+corrupting the record. Counting other tmux servers reads the socket directory
+rather than scanning process arguments, which keeps it quiet on macOS after sleep.
 
-</td>
-<td width="50%">
+## Keys
 
-### No temp files
+| Key | Action |
+|-----|--------|
+| `prefix + C-s` | save now |
+| `prefix + C-r` | restore the last save |
 
-All state lives in tmux server options, so nothing touches the filesystem.
+Both keys are configurable.
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+## Configuration
 
-### bash 3.2 compatible
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `@persist_revamped_save_key` | `C-s` | key that triggers a manual save |
+| `@persist_revamped_restore_key` | `C-r` | key that triggers a restore |
+| `@persist_revamped_interval` | `15` | auto-save interval in minutes; `0` turns auto-save off |
+| `@persist_revamped_dir` | `$XDG_STATE_HOME/tmux/persist` | where saves are written |
+| `@persist_revamped_processes` | empty | extra programs to replay on restore, appended to the built-in list |
+| `@persist_revamped_restore_on_start` | `off` | restore automatically when the server starts |
+| `@persist_revamped_boot_grace` | `60` | seconds after a boot restore during which auto-save stays off |
 
-The test harness runs on the macOS system bash without a newer interpreter.
+The built-in replay list covers common editors, pagers, and CLIs: `vim`, `nvim`,
+`emacs`, `less`, `man`, `top`, `htop`, `ssh`, `claude`, `codex`, and more. Anything
+not on the list is left as a plain shell.
 
-</td>
-<td width="50%">
+## Examples
 
-### Coverage enforced
+```tmux
+# save every 5 minutes and restore on start
+set -g @persist_revamped_interval '5'
+set -g @persist_revamped_restore_on_start 'on'
 
-CI runs a kcov gate that fails below 95%.
+# also replay these programs
+set -g @persist_revamped_processes 'lazygit k9s weechat'
 
-</td>
-</tr>
-</table>
-
-## Use this template
-
-On GitHub, click "Use this template" to generate a new repository from this one, or run `gh repo create <owner>/tmux-<metric>-revamped --template <owner>/tmux-plugin-template`.
-
-A plugin built from the template follows the layout the shared core expects: source the cache from [`src/lib/utils/cache.sh`](src/lib/utils/cache.sh), set a `CACHE_PREFIX` to namespace its options, add per-platform parsers under [`src/lib`](src/lib), and add one bats file per module under [`test/`](test) at 95%+ coverage. See [`examples/`](examples) for a worked dispatcher and worker.
-
-## Structure
-
-The shared shell modules live under [`src/`](src) and their tests under [`test/`](test).
-
+# keep saves under a project directory instead of XDG state
+set -g @persist_revamped_dir '~/.tmux/persist'
 ```
-src/
-  lib/
-    tmux/
-      tmux-ops.sh        tmux option get, set, and unset
-    utils/
-      cache.sh           async, temp-file-free cache
-      platform.sh        memoized OS detection
-      has-command.sh     command availability probe
-      error-logger.sh    opt-in logging, off by default
-      constants.sh       shared defaults
-test/                    bats suites, helpers, and tmux mock
-examples/                worked dispatcher and worker
-.github/                 Tests workflow and CI
-Makefile                 test, lint, and coverage targets
+
+## Install
+
+With [TPM](https://github.com/tmux-plugins/tpm), add to `~/.tmux.conf`:
+
+```tmux
+set -g @plugin 'gufranco/tmux-persist-revamped'
 ```
+
+Press `prefix + I` to install.
+
+## Compatibility
+
+Runs on every tmux version TPM supports, with a floor of tmux 1.9, on Linux,
+macOS on Intel and Apple Silicon, and WSL. Shell helpers work the same under BSD
+and GNU userlands.
 
 ## Development
 
-| Command | Description |
-|---------|-------------|
-| `make test` | Run the full test suite |
-| `make test-unit` | Run unit tests only |
-| `make coverage` | Measure line coverage with kcov and enforce the minimum, Linux only |
-| `make lint` | Run shellcheck on all shell files |
-| `make clean` | Remove coverage and temp artifacts |
-| `make help` | Show available targets |
+```bash
+make test    # bats suite
+make lint    # shellcheck
+```
+
+The save-file codec, the timing logic, the program-restore matcher, and the
+server count are pure functions with fixture tests; every tmux call is a seam the
+suite drives, so the save and restore flow is verified without a live server.
 
 ## License
 
-[MIT](LICENSE), copyright Gustavo Franco.
+MIT
