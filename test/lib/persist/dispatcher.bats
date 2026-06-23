@@ -80,6 +80,9 @@ teardown() {
   [[ "${output}" == *"send-keys -t main:0 cd /home/u Enter"* ]]
   [[ "${output}" == *vim* ]]
   [[ "${output}" == *htop* ]]
+  [[ "${output}" == *"select-layout -t main:0 lay0"* ]]
+  [[ "${output}" == *"select-window -t main:0"* ]]
+  [[ "${output}" == *"select-pane -t main:0.0"* ]]
 }
 
 @test "dispatcher - restore adds a window when the session already exists" {

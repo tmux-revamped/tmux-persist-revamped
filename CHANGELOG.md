@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Save the full tmux environment: sessions, windows, panes, layouts, and working
   directories, with `prefix + C-s`.
 - Restore it with `prefix + C-r`, replaying an allow-listed foreground program in
-  each pane.
+  each pane, reapplying each window's saved layout, and returning focus to the
+  window and pane that were active.
 - Auto-save on a configurable interval from a detached worker that never writes
   into `status-right`.
 - Restore on server start, guarded by a boot grace window so the first auto-save

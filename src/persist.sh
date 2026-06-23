@@ -157,6 +157,19 @@ persist_restore() {
       _tmux send-keys -t "${key}" "${pc}" Enter
     fi
   done <"${file}"
+  while IFS= read -r line; do
+    [[ "${line}" == window* ]] || continue
+    _read_fields "${line}"
+    local s="${FIELDS[1]}" wi="${FIELDS[2]}" wa="${FIELDS[4]}" wl="${FIELDS[5]}"
+    [[ -n "${wl}" ]] && _tmux select-layout -t "${s}:${wi}" "${wl}"
+    [[ "${wa}" == "1" ]] && _tmux select-window -t "${s}:${wi}"
+  done <"${file}"
+  while IFS= read -r line; do
+    [[ "${line}" == pane* ]] || continue
+    _read_fields "${line}"
+    local s="${FIELDS[1]}" wi="${FIELDS[2]}" pi="${FIELDS[3]}" pa="${FIELDS[4]}"
+    [[ "${pa}" == "1" ]] && _tmux select-pane -t "${s}:${wi}.${pi}"
+  done <"${file}"
   return 0
 }
 

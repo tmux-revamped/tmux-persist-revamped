@@ -85,6 +85,16 @@ Runs on every tmux version TPM supports, with a floor of tmux 1.9, on Linux,
 macOS on Intel and Apple Silicon, and WSL. Shell helpers work the same under BSD
 and GNU userlands.
 
+## Not yet restored
+
+Deferred to a later release, deliberately rather than dropped:
+
+- Pane contents, the scrollback. The repaint methods in common use leave artifacts
+  in the shell history, so this needs a dedicated, tested approach.
+- A program's full command line with arguments. Capturing it reliably means
+  reading per-pane process state, which reintroduces the cost this rewrite avoids.
+- Grouped sessions.
+
 ## Development
 
 ```bash
