@@ -41,11 +41,19 @@ persist_join() {
   printf '%s\n' "${out}"
 }
 
-# persist_split LINE -> the record's fields, each unescaped, NUL separated so a
-# value that contains a newline still reads back as one field. Empty and trailing
-# empty fields are preserved.
+# persist_split LINE -> the record's still-escaped fields, one per line. Splitting
+# on the literal tab is safe because an escaped field never contains a literal tab
+# or newline; the caller unescapes each field with persist_unescape. Done in pure
+# bash so it does not depend on a particular awk emitting NUL bytes. Empty and
+# trailing empty fields are preserved.
 persist_split() {
-  printf '%s' "${1}" | LC_ALL=C awk -F'\t' 'BEGIN{RS="\n"} {for(i=1;i<=NF;i++){f=$i; gsub(/\\\\/,"\001",f); gsub(/\\t/,"\t",f); gsub(/\\n/,"\n",f); gsub(/\001/,"\\",f); printf "%s\000",f}}'
+  local rest="${1}" field
+  while [[ "${rest}" == *$'\t'* ]]; do
+    field="${rest%%$'\t'*}"
+    rest="${rest#*$'\t'}"
+    printf '%s\n' "${field}"
+  done
+  printf '%s\n' "${rest}"
 }
 
 export -f persist_escape

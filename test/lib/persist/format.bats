@@ -14,12 +14,12 @@ teardown() {
   cleanup_test_environment
 }
 
-# Read persist_split's NUL-separated output into the global array SPLIT.
+# Read persist_split's per-line escaped fields, unescaping each, into SPLIT.
 collect() {
   SPLIT=()
   local f
-  while IFS= read -r -d '' f; do
-    SPLIT+=("${f}")
+  while IFS= read -r f; do
+    SPLIT+=("$(persist_unescape "${f}")")
   done
 }
 

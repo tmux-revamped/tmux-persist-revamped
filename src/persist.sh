@@ -118,8 +118,8 @@ persist_save() {
 _read_fields() {
   FIELDS=()
   local f
-  while IFS= read -r -d '' f; do
-    FIELDS+=("${f}")
+  while IFS= read -r f; do
+    FIELDS+=("$(persist_unescape "${f}")")
   done < <(persist_split "${1}")
 }
 
