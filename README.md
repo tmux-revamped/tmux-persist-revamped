@@ -76,7 +76,7 @@ set -g @persist_revamped_dir '~/.tmux/persist'
 With [TPM](https://github.com/tmux-plugins/tpm), add to `~/.tmux.conf`:
 
 ```tmux
-set -g @plugin 'gufranco/tmux-persist-revamped'
+set -g @plugin 'tmux-revamped/tmux-persist-revamped'
 ```
 
 Press `prefix + I` to install.
