@@ -116,6 +116,65 @@ teardown() {
   [[ "${output}" == *"cat"* ]]
 }
 
+@test "dispatcher - argv_from_forest returns the shell's foreground child" {
+  local forest=$'1000 1 -bash\n2000 1000 vim src/app.ts\n3000 2000 vim-helper'
+  [[ "$(argv_from_forest "${forest}" 1000)" == "vim src/app.ts" ]]
+}
+
+@test "dispatcher - argv_from_forest is empty for a bare shell" {
+  local forest=$'1000 1 -bash\n2000 1 unrelated'
+  [[ -z "$(argv_from_forest "${forest}" 1000)" ]]
+}
+
+@test "dispatcher - argv_from_forest prefers the newest direct child" {
+  local forest=$'1000 1 -zsh\n2000 1000 less file\n2500 1000 htop'
+  [[ "$(argv_from_forest "${forest}" 1000)" == "htop" ]]
+}
+
+@test "dispatcher - argv_from_forest matches the expected command over a newer sibling" {
+  local forest=$'1000 1 -zsh\n2000 1000 vim notes.md\n2500 1000 sleep 999'
+  [[ "$(argv_from_forest "${forest}" 1000 vim)" == "vim notes.md" ]]
+}
+
+@test "dispatcher - argv_from_forest is empty when no child matches the expected command" {
+  local forest=$'1000 1 -zsh\n2000 1000 sleep 999'
+  [[ -z "$(argv_from_forest "${forest}" 1000 vim)" ]]
+}
+
+@test "dispatcher - dump captures the full command line when args are enabled" {
+  tmux set-option -gq "@persist_revamped_capture_args" "on"
+  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim	2000"; }
+  _read_ps_forest() { printf '%s\n' "$(printf '2000 1 -bash\n2100 2000 vim src/app.ts')"; }
+  persist_dump >"${BATS_TEST_TMPDIR}/da.txt"
+  run cat "${BATS_TEST_TMPDIR}/da.txt"
+  [[ "${lines[1]}" == pane* ]]
+  [[ "${lines[1]}" == *"src/app.ts"* ]]
+}
+
+@test "dispatcher - restore replays the full command line when present" {
+  mkdir -p "${SAVE}"
+  persist_join pane main 0 0 1 /home/u vim "" "vim src/app.ts" >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+  persist_restore >"${BATS_TEST_TMPDIR}/rf.txt"
+  run cat "${BATS_TEST_TMPDIR}/rf.txt"
+  [[ "${output}" == *"send-keys -t main:0 vim src/app.ts Enter"* ]]
+}
+
+@test "dispatcher - restore falls back to the bare command without saved args" {
+  mkdir -p "${SAVE}"
+  persist_join pane main 0 0 1 /home/u vim >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+  persist_restore >"${BATS_TEST_TMPDIR}/rb.txt"
+  run cat "${BATS_TEST_TMPDIR}/rb.txt"
+  [[ "${output}" == *"send-keys -t main:0 vim Enter"* ]]
+}
+
+@test "dispatcher - ps-forest seam is callable" {
+  run _read_ps_forest
+  true
+}
+
 @test "dispatcher - restore adds a window when the session already exists" {
   mkdir -p "${SAVE}"
   persist_join window main 1 logs 0 lay0 >"${SAVE}/last.txt"

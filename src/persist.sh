@@ -48,7 +48,7 @@ _list_windows() {
 
 _list_panes() {
   command tmux list-panes -a -F \
-    '#{session_name}	#{window_index}	#{pane_index}	#{pane_active}	#{pane_current_path}	#{pane_current_command}' 2>/dev/null
+    '#{session_name}	#{window_index}	#{pane_index}	#{pane_active}	#{pane_current_path}	#{pane_current_command}	#{pane_pid}' 2>/dev/null
 }
 
 _has_session() {
@@ -61,6 +61,41 @@ _mktemp() {
 
 _capture_pane() {
   command tmux capture-pane -p -t "${1}" 2>/dev/null
+}
+
+# _read_ps_forest -> "pid ppid command-with-args" for every process. The flags
+# differ by userland: BSD ps treats -e as "show environment", so macOS needs
+# -axo command=, while Linux procps needs -eo args=. Any failure yields empty,
+# which makes the caller fall back to the bare command, never a wrong one.
+_read_ps_forest() {
+  if [[ "$(uname -s 2>/dev/null)" == "Darwin" ]]; then
+    ps -axo pid=,ppid=,command= 2>/dev/null
+  else
+    ps -eo pid=,ppid=,args= 2>/dev/null
+  fi
+}
+
+# argv_from_forest FOREST SHELL_PID [EXPECT] -> the full command line of
+# SHELL_PID's foreground program, read from a direct child of the pane shell.
+# FOREST is _read_ps_forest output. When EXPECT is given (the pane_current_command)
+# only a child whose program basename matches it is returned, so a backgrounded
+# sibling with a higher pid can never be replayed in its place; with no match the
+# result is empty and the caller falls back to the bare command. Without EXPECT
+# the highest-pid child is returned. Pure: fixture in, string out, no ps, no tmux.
+argv_from_forest() {
+  local forest="${1}" pid="${2}" expect="${3:-}"
+  local fpid fppid frest base match="" fb="" fbpid=""
+  while read -r fpid fppid frest; do
+    [[ "${fppid}" == "${pid}" ]] || continue
+    if [[ -z "${fbpid}" ]] || (( fpid > fbpid )); then fbpid="${fpid}"; fb="${frest}"; fi
+    if [[ -n "${expect}" && -z "${match}" ]]; then
+      base="${frest%% *}"; base="${base##*/}"
+      [[ "${base}" == "${expect}"* ]] && match="${frest}"
+    fi
+  done <<< "${forest}"
+  if [[ -n "${match}" ]]; then printf '%s' "${match}"; return 0; fi
+  if [[ -z "${expect}" && -n "${fb}" ]]; then printf '%s' "${fb}"; return 0; fi
+  echo ""
 }
 
 # _repaint_pane TARGET CONTENT -> redraw a pane's saved screen by writing the
@@ -100,18 +135,24 @@ persist_proclist() {
 # persist_dump -> the save-file content on stdout: one escaped record per window
 # and per pane.
 persist_dump() {
-  local s wi wn wa wl pi pa pp pc capture content
+  local s wi wn wa wl pi pa pp pc pid capture capture_args content full forest=""
   while IFS=$'\t' read -r s wi wn wa wl; do
     [[ -n "${s}" ]] && persist_join "window" "${s}" "${wi}" "${wn}" "${wa}" "${wl}"
   done < <(_list_windows)
   capture="$(get_tmux_option "@persist_revamped_capture_panes" "off")"
-  while IFS=$'\t' read -r s wi pi pa pp pc; do
+  capture_args="$(get_tmux_option "@persist_revamped_capture_args" "off")"
+  [[ "${capture_args}" == "on" ]] && forest="$(_read_ps_forest)"
+  while IFS=$'\t' read -r s wi pi pa pp pc pid; do
     [[ -n "${s}" ]] || continue
     content=""
     if [[ "${capture}" == "on" ]]; then
       content="$(persist_strip_trailing_blanks "$(_capture_pane "${s}:${wi}.${pi}")")"
     fi
-    persist_join "pane" "${s}" "${wi}" "${pi}" "${pa}" "${pp}" "${pc}" "${content}"
+    full=""
+    if [[ "${capture_args}" == "on" && -n "${pid}" ]]; then
+      full="$(argv_from_forest "${forest}" "${pid}" "${pc}")"
+    fi
+    persist_join "pane" "${s}" "${wi}" "${pi}" "${pa}" "${pp}" "${pc}" "${content}" "${full}"
   done < <(_list_panes)
 }
 
@@ -175,8 +216,9 @@ persist_restore() {
     _tmux send-keys -t "${key}" "cd ${pp}" Enter
     local content="${FIELDS[7]:-}"
     [[ -n "${content}" ]] && _repaint_pane "${key}" "${content}"
+    local full="${FIELDS[8]:-}"
     if strategy_match "${pc}" "${proclist}"; then
-      _tmux send-keys -t "${key}" "${pc}" Enter
+      _tmux send-keys -t "${key}" "$(strategy_restore_command "${pc}" "${full}")" Enter
     fi
   done <"${file}"
   while IFS= read -r line; do

@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-24
+
+### Added
+
+- Optional full command-line restore. With `@persist_revamped_capture_args` set
+  to `on`, a restorable program is replayed with its arguments (`vim src/app.ts`
+  rather than bare `vim`). The argument capture reads the pane shell's foreground
+  child from `ps`, picking the correct flags per userland, and falls back to the
+  bare command whenever the arguments cannot be resolved, so a restore never
+  replays a wrong command.
+
 ## [1.1.0] - 2026-06-24
 
 ### Added

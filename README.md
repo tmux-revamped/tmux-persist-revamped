@@ -49,6 +49,7 @@ Both keys are configurable.
 | `@persist_revamped_dir` | `$XDG_STATE_HOME/tmux/persist` | where saves are written |
 | `@persist_revamped_processes` | empty | extra programs to replay on restore, appended to the built-in list |
 | `@persist_revamped_capture_panes` | `off` | set to `on` to save each pane's visible text and repaint it on restore; trailing blank lines are trimmed so the real output stays on screen |
+| `@persist_revamped_capture_args` | `off` | set to `on` to save the full command line of each restorable program and replay it with its arguments, for example `vim src/app.ts` instead of bare `vim`; falls back to the bare command when the arguments cannot be resolved |
 | `@persist_revamped_restore_on_start` | `off` | restore automatically when the server starts |
 | `@persist_revamped_boot_grace` | `60` | seconds after a boot restore during which auto-save stays off |
 
