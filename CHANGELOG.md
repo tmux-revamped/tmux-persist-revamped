@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-06-24
+
+### Fixed
+
+- Restore now runs only once per server lifetime instead of on every config
+  reload. The entry point calls `boot` on each plugin load, so a `source-file`
+  used to re-run a full restore against the live session. A server-scoped marker
+  now tells a genuine server start apart from a reload.
+- Restore never sends keystrokes to a pane that is not a shell. A restore against
+  a live server could resolve to a window already running a program and inject a
+  `cd`, a repaint, or a replayed command into it. Each pane's current command is
+  checked, and the directory, repaint, and program replay are skipped for any
+  pane that is not an interactive shell.
+
 ## [1.2.0] - 2026-06-24
 
 ### Added

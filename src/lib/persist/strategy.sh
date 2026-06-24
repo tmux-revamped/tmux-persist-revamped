@@ -40,6 +40,18 @@ strategy_restore_command() {
   fi
 }
 
+# is_shell_cmd CMD -> success when CMD names an interactive shell, that is, a pane
+# it is safe to type into. A restore must never send keystrokes to a pane that is
+# already running a program, so anything outside this set, including an empty
+# value, is treated as unsafe. The leading-dash forms cover login shells.
+is_shell_cmd() {
+  case "${1}" in
+    bash | -bash | zsh | -zsh | fish | -fish | sh | -sh | dash | -dash | ksh | -ksh | tcsh | -tcsh | csh | -csh | ash | -ash) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 export -f strategy_default_list
 export -f strategy_match
 export -f strategy_restore_command
+export -f is_shell_cmd

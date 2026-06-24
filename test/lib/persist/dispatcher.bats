@@ -175,6 +175,26 @@ teardown() {
   true
 }
 
+@test "dispatcher - restore does not type into a pane that is not a shell" {
+  mkdir -p "${SAVE}"
+  persist_join pane main 0 0 1 /home/u vim "" "vim src/app.ts" >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+  PERSIST_FAKE_PANE_CMD="claude" persist_restore >"${BATS_TEST_TMPDIR}/skip.txt"
+  run cat "${BATS_TEST_TMPDIR}/skip.txt"
+  [[ "${output}" != *"send-keys -t main:0 cd"* ]]
+  [[ "${output}" != *"send-keys -t main:0 vim"* ]]
+}
+
+@test "dispatcher - restore types into a shell pane" {
+  mkdir -p "${SAVE}"
+  persist_join pane main 0 0 1 /home/u vim "" "vim src/app.ts" >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+  PERSIST_FAKE_PANE_CMD="bash" persist_restore >"${BATS_TEST_TMPDIR}/keep.txt"
+  run cat "${BATS_TEST_TMPDIR}/keep.txt"
+  [[ "${output}" == *"send-keys -t main:0 cd /home/u Enter"* ]]
+  [[ "${output}" == *"send-keys -t main:0 vim src/app.ts Enter"* ]]
+}
+
 @test "dispatcher - restore adds a window when the session already exists" {
   mkdir -p "${SAVE}"
   persist_join window main 1 logs 0 lay0 >"${SAVE}/last.txt"
@@ -259,6 +279,24 @@ teardown() {
   [ "${restored}" -eq 0 ]
 }
 
+@test "dispatcher - boot restores only once per server lifetime" {
+  tmux set-option -gq "@persist_revamped_restore_on_start" "on"
+  tmux set-option -gq "@persist_revamped_booted" "1"
+  local restored=0
+  persist_restore() { restored=1; }
+  persist_boot
+  [ "${restored}" -eq 0 ]
+}
+
+@test "dispatcher - boot marks the server as booted before restoring" {
+  tmux set-option -gq "@persist_revamped_restore_on_start" "on"
+  tmux set-option -gqu "@persist_revamped_booted"
+  persist_restore() { :; }
+  _now() { echo 5000; }
+  persist_boot
+  [[ "$(tmux show-option -gqv "@persist_revamped_booted")" == "1" ]]
+}
+
 @test "dispatcher - main routes each subcommand and rejects unknown ones" {
   local hit=""
   persist_save() { hit="save"; }
@@ -288,6 +326,7 @@ teardown() {
   _tmux list-windows >/dev/null 2>&1 || true
   _has_session "no_such_session_xyz" >/dev/null 2>&1 || true
   _mktemp "${BATS_TEST_TMPDIR}" >/dev/null 2>&1 || true
+  _pane_current_command "no_such_session_xyz:0" >/dev/null 2>&1 || true
 }
 
 @test "dispatcher - save cleans up and fails when the dump fails" {

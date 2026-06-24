@@ -48,3 +48,18 @@ teardown() {
 @test "strategy - restore falls back to the bare command" {
   [[ "$(strategy_restore_command "htop" "")" == "htop" ]]
 }
+
+@test "strategy - is_shell_cmd accepts interactive shells" {
+  is_shell_cmd "bash"
+  is_shell_cmd "zsh"
+  is_shell_cmd "fish"
+  is_shell_cmd "sh"
+  is_shell_cmd "-zsh"
+}
+
+@test "strategy - is_shell_cmd rejects programs and the empty value" {
+  ! is_shell_cmd "vim"
+  ! is_shell_cmd "claude"
+  ! is_shell_cmd "htop"
+  ! is_shell_cmd ""
+}

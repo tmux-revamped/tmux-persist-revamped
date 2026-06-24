@@ -28,6 +28,7 @@ readonly PERSIST_OPT_RESTORE_ON_START="@persist_revamped_restore_on_start"
 readonly PERSIST_OPT_BOOT_GRACE="@persist_revamped_boot_grace"
 readonly PERSIST_OPT_LAST_TS="@persist_revamped_last_ts"
 readonly PERSIST_OPT_BOOT_TS="@persist_revamped_boot_ts"
+readonly PERSIST_OPT_BOOTED="@persist_revamped_booted"
 
 # --- tmux seams (tests override these) -------------------------------------
 
@@ -61,6 +62,18 @@ _mktemp() {
 
 _capture_pane() {
   command tmux capture-pane -p -t "${1}" 2>/dev/null
+}
+
+# _pane_current_command TARGET -> the command currently running in TARGET's active
+# pane. Used to decide whether sending keys to the pane is safe. Under dry-run the
+# tests feed a value through PERSIST_FAKE_PANE_CMD, defaulting to a shell so the
+# normal restore path stays exercised.
+_pane_current_command() {
+  if [[ -n "${PERSIST_DRY_RUN:-}" ]]; then
+    printf '%s' "${PERSIST_FAKE_PANE_CMD:-zsh}"
+  else
+    command tmux display-message -p -t "${1}" '#{pane_current_command}' 2>/dev/null
+  fi
 }
 
 # _read_ps_forest -> "pid ppid command-with-args" for every process. The flags
@@ -213,6 +226,11 @@ persist_restore() {
     else
       seen="${seen} ${key}"
     fi
+    # Never type into a pane that is not a shell. A restore against a live server
+    # can resolve to a window that already runs a program, and sending keys there
+    # would inject commands into it. Skip the directory, repaint, and program
+    # replay for any such pane.
+    is_shell_cmd "$(_pane_current_command "${key}")" || continue
     _tmux send-keys -t "${key}" "cd ${pp}" Enter
     local content="${FIELDS[7]:-}"
     [[ -n "${content}" ]] && _repaint_pane "${key}" "${content}"
@@ -262,6 +280,13 @@ persist_auto() {
 # the grace window can suppress the first auto-saves.
 persist_boot() {
   [[ "$(get_tmux_option "${PERSIST_OPT_RESTORE_ON_START}" "off")" == "on" ]] || return 0
+  # Restore once per server lifetime, not on every config reload. The entry point
+  # runs boot on each plugin load, but a server option survives reloads and resets
+  # only when the server dies, so it tells a genuine server start apart from a
+  # source-file. Stamp the marker before restoring so a reload mid-restore cannot
+  # start a second one.
+  [[ "$(get_tmux_option "${PERSIST_OPT_BOOTED}" "0")" == "1" ]] && return 0
+  set_tmux_option "${PERSIST_OPT_BOOTED}" "1"
   persist_restore || true
   set_tmux_option "${PERSIST_OPT_BOOT_TS}" "$(_now)"
 }
