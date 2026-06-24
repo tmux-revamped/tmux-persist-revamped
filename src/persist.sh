@@ -59,6 +59,20 @@ _mktemp() {
   mktemp "${1}/.save.XXXXXX" 2>/dev/null
 }
 
+_capture_pane() {
+  command tmux capture-pane -p -t "${1}" 2>/dev/null
+}
+
+# _repaint_pane TARGET CONTENT -> redraw a pane's saved screen by writing the
+# content to a temp file and having the pane's shell cat it. The content is
+# catted from a file rather than typed, so it can never be executed as commands.
+_repaint_pane() {
+  local target="${1}" content="${2}" tmpf
+  tmpf="$(_mktemp "$(persist_save_dir)")" || return 0
+  printf '%s\n' "${content}" >"${tmpf}" 2>/dev/null || { rm -f "${tmpf}"; return 0; }
+  _tmux send-keys -t "${target}" "clear; cat -- '${tmpf}'; command rm -f -- '${tmpf}'" Enter
+}
+
 # --- options ---------------------------------------------------------------
 
 persist_save_dir() {
@@ -86,12 +100,18 @@ persist_proclist() {
 # persist_dump -> the save-file content on stdout: one escaped record per window
 # and per pane.
 persist_dump() {
-  local s wi wn wa wl pi pa pp pc
+  local s wi wn wa wl pi pa pp pc capture content
   while IFS=$'\t' read -r s wi wn wa wl; do
     [[ -n "${s}" ]] && persist_join "window" "${s}" "${wi}" "${wn}" "${wa}" "${wl}"
   done < <(_list_windows)
+  capture="$(get_tmux_option "@persist_revamped_capture_panes" "off")"
   while IFS=$'\t' read -r s wi pi pa pp pc; do
-    [[ -n "${s}" ]] && persist_join "pane" "${s}" "${wi}" "${pi}" "${pa}" "${pp}" "${pc}"
+    [[ -n "${s}" ]] || continue
+    content=""
+    if [[ "${capture}" == "on" ]]; then
+      content="$(persist_strip_trailing_blanks "$(_capture_pane "${s}:${wi}.${pi}")")"
+    fi
+    persist_join "pane" "${s}" "${wi}" "${pi}" "${pa}" "${pp}" "${pc}" "${content}"
   done < <(_list_panes)
 }
 
@@ -153,6 +173,8 @@ persist_restore() {
       seen="${seen} ${key}"
     fi
     _tmux send-keys -t "${key}" "cd ${pp}" Enter
+    local content="${FIELDS[7]:-}"
+    [[ -n "${content}" ]] && _repaint_pane "${key}" "${content}"
     if strategy_match "${pc}" "${proclist}"; then
       _tmux send-keys -t "${key}" "${pc}" Enter
     fi

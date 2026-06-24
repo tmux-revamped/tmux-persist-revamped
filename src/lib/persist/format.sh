@@ -56,7 +56,23 @@ persist_split() {
   printf '%s\n' "${rest}"
 }
 
+# persist_strip_trailing_blanks TEXT -> TEXT with trailing blank lines removed.
+# capture-pane pads the area below the last line of real output with blank lines;
+# repainting those blanks scrolls the real content off the top of the pane. This
+# is the resurrect trailing-blank bug (#549, #503). Pure awk so it behaves the
+# same under BSD and GNU.
+persist_strip_trailing_blanks() {
+  printf '%s' "${1}" | awk '
+    { lines[NR] = $0 }
+    END {
+      last = NR
+      while (last > 0 && lines[last] ~ /^[[:space:]]*$/) last--
+      for (i = 1; i <= last; i++) print lines[i]
+    }'
+}
+
 export -f persist_escape
 export -f persist_unescape
 export -f persist_join
 export -f persist_split
+export -f persist_strip_trailing_blanks

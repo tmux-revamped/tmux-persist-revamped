@@ -48,6 +48,7 @@ Both keys are configurable.
 | `@persist_revamped_interval` | `15` | auto-save interval in minutes; `0` turns auto-save off |
 | `@persist_revamped_dir` | `$XDG_STATE_HOME/tmux/persist` | where saves are written |
 | `@persist_revamped_processes` | empty | extra programs to replay on restore, appended to the built-in list |
+| `@persist_revamped_capture_panes` | `off` | set to `on` to save each pane's visible text and repaint it on restore; trailing blank lines are trimmed so the real output stays on screen |
 | `@persist_revamped_restore_on_start` | `off` | restore automatically when the server starts |
 | `@persist_revamped_boot_grace` | `60` | seconds after a boot restore during which auto-save stays off |
 

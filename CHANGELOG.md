@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-24
+
+### Added
+
+- Optional pane-content repaint. With `@persist_revamped_capture_panes` set to
+  `on`, each pane's visible text is saved and redrawn on restore. The content is
+  catted from a temporary file rather than typed, so it can never run as
+  commands, and trailing blank lines are trimmed so the restored screen is not
+  scrolled away (upstream resurrect #549, #503).
+
 ## [1.0.0] - 2026-06-23
 
 ### Added

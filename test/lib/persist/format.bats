@@ -82,3 +82,19 @@ collect() {
   local v="café ação número"
   [[ "$(persist_unescape "$(persist_escape "${v}")")" == "${v}" ]]
 }
+
+@test "format - strip_trailing_blanks drops trailing blank lines only" {
+  local out
+  out="$(persist_strip_trailing_blanks "$(printf 'one\ntwo\n\n  \n\t\n')")"
+  [[ "${out}" == "$(printf 'one\ntwo')" ]]
+}
+
+@test "format - strip_trailing_blanks keeps interior blank lines" {
+  local out
+  out="$(persist_strip_trailing_blanks "$(printf 'a\n\nb\n')")"
+  [[ "${out}" == "$(printf 'a\n\nb')" ]]
+}
+
+@test "format - strip_trailing_blanks is empty for all-blank input" {
+  [[ -z "$(persist_strip_trailing_blanks "$(printf '\n  \n\n')")" ]]
+}

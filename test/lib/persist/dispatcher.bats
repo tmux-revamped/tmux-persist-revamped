@@ -85,6 +85,37 @@ teardown() {
   [[ "${output}" == *"select-pane -t main:0.0"* ]]
 }
 
+@test "dispatcher - dump captures stripped pane content when enabled" {
+  tmux set-option -gq "@persist_revamped_capture_panes" "on"
+  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _capture_pane() { printf 'line one\nline two\n\n\n'; }
+  persist_dump >"${BATS_TEST_TMPDIR}/d.txt"
+  run cat "${BATS_TEST_TMPDIR}/d.txt"
+  [[ "${lines[1]}" == pane* ]]
+  [[ "${lines[1]}" == *"line one"* ]]
+  [[ "${lines[1]}" == *"line two"* ]]
+}
+
+@test "dispatcher - restore repaints a pane from its saved content" {
+  mkdir -p "${SAVE}"
+  persist_join pane main 0 0 1 /home/u bash "old screen text" >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+  local marker="${BATS_TEST_TMPDIR}/repaint"
+  _repaint_pane() { echo "REPAINT:${1}:${2}" >"${marker}"; }
+  persist_restore >/dev/null
+  [[ -f "${marker}" ]]
+  [[ "$(cat "${marker}")" == "REPAINT:main:0:old screen text" ]]
+}
+
+@test "dispatcher - repaint writes the content and sends a cat keystroke" {
+  mkdir -p "${SAVE}"
+  _repaint_pane "main:0" "hello world" >"${BATS_TEST_TMPDIR}/rp.txt"
+  run cat "${BATS_TEST_TMPDIR}/rp.txt"
+  [[ "${output}" == *"send-keys -t main:0"* ]]
+  [[ "${output}" == *"cat"* ]]
+}
+
 @test "dispatcher - restore adds a window when the session already exists" {
   mkdir -p "${SAVE}"
   persist_join window main 1 logs 0 lay0 >"${SAVE}/last.txt"
@@ -211,4 +242,9 @@ teardown() {
   _mktemp() { return 1; }
   run persist_save
   [ "${status}" -ne 0 ]
+}
+
+@test "dispatcher - capture-pane seam is callable" {
+  run _capture_pane "main:0"
+  true
 }
