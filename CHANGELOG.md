@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-30
+
+### Added
+
+- Named save slots. `save <slot>` and `restore <slot>` park and swap whole
+  environments under their own files; the unnamed slot stays the legacy
+  `last.txt`. `slots` lists them and `pick` restores one through an fzf popup,
+  bound only when `@persist_revamped_pick_key` is set.
+- Full layout fidelity. The window zoom state is now saved and reapplied on
+  restore alongside the exact layout, active window, and active pane.
+- Vim and Neovim session restore. With `@persist_revamped_vim_sessions` on, a
+  pane whose editor left a `Session.vim` reopens with `nvim -S` into a fresh
+  shell pane instead of a bare editor.
+- Selective merge restore. `merge <session>` restores a single session and never
+  when it already exists, so a running environment is never clobbered.
+- Sensitive-pane redaction. Capture skips the scrollback of panes running `ssh`,
+  `sudo`, and similar; extend the list with `@persist_revamped_redact`.
+- Event-based saves. With `@persist_revamped_event_debounce` set, genuine close
+  events trigger a debounced save; the boot grace window still suppresses it.
+- Host-portable saves. With `@persist_revamped_rewrite_home` on, a directory
+  saved under one home is replayed under the current home.
+- Save and restore hooks: `@persist_revamped_pre_save_hook`,
+  `_post_save_hook`, `_pre_restore_hook`, and `_post_restore_hook`.
+- Rolling backups. `@persist_revamped_backups` keeps that many timestamped
+  copies of a save, pruning the oldest.
+- Inspection commands: `preview` summarizes a save, `verify` checks its
+  integrity and staleness, and `doctor` reports what was found on the host. Save
+  files now carry a schema-version header.
+
 ## [1.2.1] - 2026-06-24
 
 ### Fixed

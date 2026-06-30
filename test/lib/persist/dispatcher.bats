@@ -6,6 +6,14 @@ setup() {
   setup_test_environment
   unset _PERSIST_REVAMPED_FORMAT_LOADED _PERSIST_REVAMPED_SCHEDULE_LOADED
   unset _PERSIST_REVAMPED_STRATEGY_LOADED _PERSIST_REVAMPED_SERVERS_LOADED
+  unset _PERSIST_REVAMPED_SLOTS_LOADED _PERSIST_REVAMPED_SCHEMA_LOADED
+  unset _PERSIST_REVAMPED_TRANSFORM_LOADED _PERSIST_REVAMPED_BACKUP_LOADED
+  unset _PERSIST_REVAMPED_EVENT_LOADED _PERSIST_REVAMPED_VIMSESSION_LOADED
+  # Point any real tmux call at an empty socket dir so the live-seam test can
+  # never read or mutate the developer's running tmux server.
+  export TMUX_TMPDIR="${BATS_TEST_TMPDIR}/tmuxsock"
+  mkdir -p "${TMUX_TMPDIR}"
+  unset TMUX
   PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../../.."
   export PERSIST_DRY_RUN=1
   source "${PLUGIN_ROOT}/src/persist.sh"

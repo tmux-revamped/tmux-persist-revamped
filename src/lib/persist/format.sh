@@ -62,13 +62,7 @@ persist_split() {
 # is the resurrect trailing-blank bug (#549, #503). Pure awk so it behaves the
 # same under BSD and GNU.
 persist_strip_trailing_blanks() {
-  printf '%s' "${1}" | awk '
-    { lines[NR] = $0 }
-    END {
-      last = NR
-      while (last > 0 && lines[last] ~ /^[[:space:]]*$/) last--
-      for (i = 1; i <= last; i++) print lines[i]
-    }'
+  printf '%s' "${1}" | awk '{ lines[NR] = $0 } END { last = NR; while (last > 0 && lines[last] ~ /^[[:space:]]*$/) last--; for (i = 1; i <= last; i++) print lines[i] }'
 }
 
 export -f persist_escape

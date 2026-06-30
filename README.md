@@ -39,6 +39,22 @@ rather than scanning process arguments, which keeps it quiet on macOS after slee
 
 Both keys are configurable.
 
+## Commands
+
+Run any of these as `bash <plugin>/src/persist.sh <command>`, or bind them to keys.
+
+| Command | Action |
+|---------|--------|
+| `save [slot]` | save now, into a named slot when given |
+| `restore [slot]` | restore a save, from a named slot when given |
+| `merge <session> [slot]` | restore one session only, and never over a session that already exists |
+| `slots` | list the named slots |
+| `pick` | choose a slot through fzf and restore it |
+| `preview [slot]` | print what a save holds without touching the server |
+| `verify [slot]` | check a save's integrity, schema version, and staleness |
+| `doctor` | report what the plugin found on this host |
+| `event` | a debounced save for a tmux close hook |
+
 ## Configuration
 
 | Option | Default | Meaning |
@@ -52,6 +68,17 @@ Both keys are configurable.
 | `@persist_revamped_capture_args` | `off` | set to `on` to save the full command line of each restorable program and replay it with its arguments, for example `vim src/app.ts` instead of bare `vim`; falls back to the bare command when the arguments cannot be resolved |
 | `@persist_revamped_restore_on_start` | `off` | restore automatically when the server starts |
 | `@persist_revamped_boot_grace` | `60` | seconds after a boot restore during which auto-save stays off |
+| `@persist_revamped_pick_key` | empty | key for the fzf slot-picker popup; unbound until set |
+| `@persist_revamped_redact` | empty | extra commands whose scrollback is never captured, appended to the built-in `ssh`, `sudo`, and similar |
+| `@persist_revamped_vim_sessions` | `off` | when `on`, reopen an editor with `-S` if a `Session.vim` sits in the pane's directory |
+| `@persist_revamped_rewrite_home` | `off` | when `on`, rewrite a saved home prefix to the current home on restore, for moving a save between machines |
+| `@persist_revamped_backups` | `0` | number of timestamped backups to keep per save; `0` keeps none |
+| `@persist_revamped_event_debounce` | `0` | seconds; when above `0`, genuine close events trigger a debounced save |
+| `@persist_revamped_stale_secs` | `0` | `verify` flags a save older than this many seconds; `0` disables the staleness check |
+| `@persist_revamped_pre_save_hook` | empty | shell command run before each save |
+| `@persist_revamped_post_save_hook` | empty | shell command run after a successful save |
+| `@persist_revamped_pre_restore_hook` | empty | shell command run before each restore |
+| `@persist_revamped_post_restore_hook` | empty | shell command run after each restore |
 
 The built-in replay list covers common editors, pagers, and CLIs: `vim`, `nvim`,
 `emacs`, `less`, `man`, `top`, `htop`, `ssh`, `claude`, `codex`, and more. Anything
