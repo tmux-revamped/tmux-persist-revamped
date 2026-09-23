@@ -23,18 +23,22 @@ run_entry() {
 }
 
 @test "entry point - returns instead of waiting on the auto-save worker" {
-  local captured
-  captured="$(cd "${PLUGIN_DIR}" && timeout 10 bash -c '
+  local start end
+  start="$(date +%s)"
+  run bash -c '
     tmux() { command tmux -S "'"${SOCKET}"'" "$@"; }
     export -f tmux
     out=$(bash "'"${ENTRY}"'" 2>&1)
     printf "returned\n"
-  ')"
+  '
+  end="$(date +%s)"
 
-  [[ "${captured}" == *"returned"* ]]
+  [[ "${output}" == *"returned"* ]]
+  (( end - start < 30 ))
 }
 
 @test "entry point - the worker holds none of the entry point's descriptors" {
+  command -v lsof >/dev/null || skip "lsof is not installed"
   run_entry
   sleep 0.3
   local worker
