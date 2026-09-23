@@ -130,6 +130,20 @@ cache_render() {
   cache_get "${key}"
 }
 
+# cache_set_if_stale KEY MAX_AGE PRODUCER [ARGS...]
+# Recompute KEY synchronously from the PRODUCER stdout, but only when KEY is
+# older than MAX_AGE. A value piggybacked inside another key's worker gets its
+# own refresh cadence this way: the worker runs often to keep the fast value
+# current, while a value behind this guard refreshes on its own slower schedule.
+# Always returns 0 so a caller chaining several guards never trips on a false.
+cache_set_if_stale() {
+  local key="${1}" max_age="${2}"
+  shift 2
+  cache_is_fresh "${key}" "${max_age}" && return 0
+  cache_set "${key}" "$("$@")"
+  return 0
+}
+
 export -f _cache_now
 export -f _cache_opt
 export -f cache_get
@@ -141,3 +155,4 @@ export -f cache_should_refresh
 export -f cache_refresh_if_stale
 export -f _cache_spawn
 export -f cache_render
+export -f cache_set_if_stale
