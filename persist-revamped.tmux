@@ -51,10 +51,14 @@ if [[ -n "${old_worker}" ]]; then
 fi
 
 socket="$(tmux display-message -p '#{socket_path}' 2>/dev/null)"
+# The worker has to let go of this script's stdin, stdout and stderr. A
+# background child that keeps them open holds the pipe open too, so tmux's
+# run-shell waits on the worker instead of on the entry point and the config
+# reload stalls for as long as the server lives.
 (
   while [[ -S "${socket}" ]]; do
     sleep 60
     bash "${DISPATCH}" auto >/dev/null 2>&1
   done
-) &
+) </dev/null >/dev/null 2>&1 &
 tmux set-option -gq '@persist_revamped_worker_pid' "$!"
