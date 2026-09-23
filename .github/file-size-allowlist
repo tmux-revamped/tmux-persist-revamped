@@ -1,0 +1,3 @@
+src/persist.sh 600 the save, restore and capture paths share the format
+version and the redaction table, so splitting them exports state that has no
+meaning outside this file. Revisit when a fourth path is added.
