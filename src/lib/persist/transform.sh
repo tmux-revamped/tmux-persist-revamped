@@ -64,8 +64,12 @@ transform_rewrite_path() {
 # shell as one word instead of several. The form is understood by every shell the
 # strategy allows, including fish and csh, which do not accept a "--" separator.
 transform_shell_quote() {
-  local value="${1}"
-  printf "'%s'" "${value//\'/\'\\\'\'}"
+  local rest="${1}" out=""
+  while [[ "${rest}" == *\'* ]]; do
+    out="${out}${rest%%\'*}'\\''"
+    rest="${rest#*\'}"
+  done
+  printf "'%s%s'" "${out}" "${rest}"
 }
 
 # transform_is_sensitive CMD LIST -> success when CMD matches a glob in LIST, so its

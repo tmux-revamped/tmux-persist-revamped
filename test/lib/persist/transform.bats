@@ -118,3 +118,13 @@ teardown() {
 
   [ "${output}" = "${q}"'/home/me/$HOME *?[a] `x`'"${q}" ]
 }
+
+@test "transform - shell_quote agrees across every bash on this machine" {
+  local q="'" expected shell out
+  expected="${q}/x/${q}\\${q}${q}a b${q}"
+
+  for shell in /bin/bash "$(command -v bash)"; do
+    out="$("${shell}" -c "source '${BATS_TEST_DIRNAME}/../../../src/lib/persist/transform.sh'; transform_shell_quote \"/x/${q}a b\"")"
+    [ "${out}" = "${expected}" ]
+  done
+}
