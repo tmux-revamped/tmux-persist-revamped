@@ -244,7 +244,7 @@ teardown() {
   tmux set-option -gq "@persist_revamped_rewrite_home" "on"
   HOME="/home/new" persist_restore >"${BATS_TEST_TMPDIR}/p.txt"
   run cat "${BATS_TEST_TMPDIR}/p.txt"
-  [[ "${output}" == *"send-keys -t main:0 cd /home/new/proj Enter"* ]]
+  [[ "${output}" == *"send-keys -t main:0 cd '/home/new/proj' Enter"* ]]
 }
 
 @test "features - restore opens an editor session when Session.vim exists" {

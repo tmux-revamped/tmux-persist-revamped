@@ -62,7 +62,7 @@ persist_restore() {
     is_shell_cmd "$(_pane_current_command "${key}")" || continue
     local rpp="${pp}"
     [[ "${rewrite}" == "on" ]] && rpp="$(transform_rewrite_path "${pp}" "${old_home}" "${new_home}")"
-    _tmux send-keys -t "${key}" "cd ${rpp}" Enter
+    _tmux send-keys -t "${key}" "cd $(transform_shell_quote "${rpp}")" Enter
     local content="${FIELDS[7]:-}"
     [[ -n "${content}" ]] && _repaint_pane "${key}" "${content}"
     local full="${FIELDS[8]:-}"
