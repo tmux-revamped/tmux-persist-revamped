@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A save history. Every save is written as its own timestamped file under
+  `history/` and the slot path becomes a symlink to the newest one, so a bad save
+  can never destroy an earlier one and rolling back is repointing the link. A save
+  identical to the previous one is dropped. `@persist_revamped_backups` now means
+  how many saves the history keeps, default 5, and the old `backups/` directory is
+  no longer written; an existing one can be deleted.
+- `@persist_revamped_boot`, off by default, installs a launchd agent on macOS or a
+  systemd user unit on Linux that starts a tmux server at login, with
+  `@persist_revamped_boot_command` and `@persist_revamped_boot_label` to shape it.
+  Restore-on-start needs a server to exist, and a freshly booted machine has none
+  until a terminal is opened. Commands: `boot-install`, `boot-uninstall`,
+  `boot-sync`.
+- `@persist_revamped_halt_file`, defaulting to `no-restore` in the save directory,
+  skips restore-on-start while it exists. It is the escape hatch for a restore that
+  brings back something broken.
 - `@persist_revamped_scope_socket`, on by default, to turn per-server scoping off
   for someone who deliberately shares one save across sockets.
 - `@persist_revamped_dir` now expands a leading `~`, `$HOME` and `$HOSTNAME`, so

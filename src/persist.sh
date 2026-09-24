@@ -25,6 +25,8 @@ source "${PLUGIN_DIR}/src/lib/persist/transform.sh"
 # shellcheck source=/dev/null
 source "${PLUGIN_DIR}/src/lib/persist/backup.sh"
 # shellcheck source=/dev/null
+source "${PLUGIN_DIR}/src/lib/persist/boot.sh"
+# shellcheck source=/dev/null
 source "${PLUGIN_DIR}/src/lib/persist/event.sh"
 # shellcheck source=/dev/null
 source "${PLUGIN_DIR}/src/lib/persist/vimsession.sh"
@@ -38,6 +40,10 @@ source "${PLUGIN_DIR}/src/lib/utils/error-logger.sh"
 readonly PERSIST_OPT_INTERVAL="@persist_revamped_interval"
 readonly PERSIST_OPT_DIR="@persist_revamped_dir"
 readonly PERSIST_OPT_SCOPE_SOCKET="@persist_revamped_scope_socket"
+readonly PERSIST_OPT_HALT_FILE="@persist_revamped_halt_file"
+readonly PERSIST_OPT_BOOT="@persist_revamped_boot"
+readonly PERSIST_OPT_BOOT_COMMAND="@persist_revamped_boot_command"
+readonly PERSIST_OPT_BOOT_LABEL="@persist_revamped_boot_label"
 readonly PERSIST_OPT_PROCESSES="@persist_revamped_processes"
 readonly PERSIST_OPT_RESTORE_ON_START="@persist_revamped_restore_on_start"
 readonly PERSIST_OPT_BOOT_GRACE="@persist_revamped_boot_grace"
@@ -82,6 +88,43 @@ _hostname() {
   hostname 2>/dev/null
 }
 
+_uname() {
+  uname -s 2>/dev/null
+}
+
+_tmux_bin() {
+  command -v tmux 2>/dev/null
+}
+
+_write_file() {
+  local path="${1}" content="${2}"
+  mkdir -p "$(dirname "${path}")" 2>/dev/null || return 1
+  printf '%s' "${content}" >"${path}" 2>/dev/null
+}
+
+_agent_load() {
+  local os="${1}" path="${2}" label="${3}"
+  if [[ "${os}" == "Darwin" ]]; then
+    launchctl unload "${path}" >/dev/null 2>&1
+    launchctl load "${path}" >/dev/null 2>&1
+  else
+    systemctl --user daemon-reload >/dev/null 2>&1
+    systemctl --user enable "${label}" >/dev/null 2>&1
+  fi
+  return 0
+}
+
+_agent_unload() {
+  local os="${1}" path="${2}" label="${3}"
+  if [[ "${os}" == "Darwin" ]]; then
+    launchctl unload "${path}" >/dev/null 2>&1
+  else
+    systemctl --user disable "${label}" >/dev/null 2>&1
+    systemctl --user daemon-reload >/dev/null 2>&1
+  fi
+  return 0
+}
+
 # _lock_acquire PATH -> success when this process took the save lock. mkdir is the
 # atomic primitive available everywhere. A lock left behind by a killed save is
 # taken over once it is older than two minutes, which is far longer than a save.
@@ -95,6 +138,21 @@ _lock_acquire() {
 
 _lock_release() {
   rmdir "${1}" 2>/dev/null || true
+}
+
+# _save_body PATH -> the save's records without its header. The header carries the
+# write time, so two saves of one unchanged environment differ in it and in nothing
+# else; comparing bodies is what lets an unchanged environment be recognised.
+_save_body() {
+  grep -v "^header	" "${1}" 2>/dev/null
+}
+
+# _files_identical A B -> success when both exist and describe the same environment.
+# A save that repeats the previous one is dropped rather than added to the history,
+# so an idle machine does not fill the history with copies of one environment.
+_files_identical() {
+  [[ -e "${1}" && -e "${2}" ]] || return 1
+  [[ "$(_save_body "${1}")" == "$(_save_body "${2}")" ]]
 }
 
 _list_windows() {
@@ -234,6 +292,63 @@ persist_save_dir() {
   servers_scope_dir "${base}" "${label}"
 }
 
+persist_halt_file() {
+  local custom
+  custom="$(get_tmux_option "${PERSIST_OPT_HALT_FILE}" "")"
+  if [[ -n "${custom}" ]]; then
+    transform_expand_path "${custom}" "${HOME}" "$(_hostname)"
+    return 0
+  fi
+  printf '%s/no-restore' "$(persist_save_dir)"
+}
+
+persist_boot_label() {
+  local label
+  label="$(get_tmux_option "${PERSIST_OPT_BOOT_LABEL}" "tmux-persist-revamped")"
+  boot_label_valid "${label}" || label="tmux-persist-revamped"
+  printf '%s' "${label}"
+}
+
+persist_boot_install() {
+  local os home label path bin args content
+  os="$(_uname)"
+  home="${HOME}"
+  label="$(persist_boot_label)"
+  path="$(boot_agent_path "${os}" "${home}" "${label}")"
+  bin="$(_tmux_bin)"
+  [[ -n "${bin}" ]] || { log_error "persist_boot_install" "no tmux on PATH"; return 1; }
+  args="$(get_tmux_option "${PERSIST_OPT_BOOT_COMMAND}" "new-session -d")"
+  if [[ "${os}" == "Darwin" ]]; then
+    content="$(boot_plist "${label}" "${bin}" "${args}")"
+  else
+    content="$(boot_unit "${bin}" "${args}")"
+  fi
+  _write_file "${path}" "${content}" || { log_error "persist_boot_install" "could not write ${path}"; return 1; }
+  _agent_load "${os}" "${path}" "${label}"
+  printf '%s\n' "${path}"
+}
+
+persist_boot_uninstall() {
+  local os home label path
+  os="$(_uname)"
+  home="${HOME}"
+  label="$(persist_boot_label)"
+  path="$(boot_agent_path "${os}" "${home}" "${label}")"
+  [[ -e "${path}" ]] || return 0
+  _agent_unload "${os}" "${path}" "${label}"
+  rm -f "${path}"
+  printf '%s\n' "${path}"
+}
+
+persist_boot_sync() {
+  if [[ "$(get_tmux_option "${PERSIST_OPT_BOOT}" "off")" == "on" ]]; then
+    persist_boot_install >/dev/null
+  else
+    persist_boot_uninstall >/dev/null
+  fi
+  return 0
+}
+
 persist_proclist() {
   local extra
   extra="$(get_tmux_option "${PERSIST_OPT_PROCESSES}" "")"
@@ -290,18 +405,53 @@ persist_dump() {
 # TARGET under TARGET's directory/backups, pruning to the configured count. A count
 # of zero (the default) writes no backups at all.
 persist_rotate_backups() {
-  local target="${1}" keep dir bdir name victim
-  keep="$(get_tmux_option "${PERSIST_OPT_BACKUPS}" "0")"
-  [[ "${keep}" =~ ^[0-9]+$ ]] || return 0
-  (( keep > 0 )) || return 0
-  dir="$(dirname "${target}")"
-  bdir="${dir}/backups"
-  mkdir -p "${bdir}" 2>/dev/null || return 0
-  name="$(backup_name "$(_now)")"
-  cp -f "${target}" "${bdir}/${name}" 2>/dev/null || return 0
+  local target="${1}" keep hdir base victim
+  keep="$(get_tmux_option "${PERSIST_OPT_BACKUPS}" "5")"
+  [[ "${keep}" =~ ^[0-9]+$ ]] || keep=5
+  # The current save is one of the kept entries, so the floor is one. A zero here
+  # would prune the file the slot symlink points at and leave a dangling link.
+  (( keep < 1 )) && keep=1
+  hdir="$(persist_history_dir "${target}")"
+  base="$(backup_history_base "${target}")"
   while IFS= read -r victim; do
-    [[ -n "${victim}" ]] && rm -f "${bdir}/${victim}"
-  done < <(backup_prune_list "$(_list_dir "${bdir}" 'last-*.txt')" "${keep}")
+    [[ -n "${victim}" ]] && rm -f "${hdir}/${victim}"
+  done < <(backup_prune_list "$(_list_dir "${hdir}" "$(backup_history_glob "${base}")")" "${keep}")
+  return 0
+}
+
+# persist_unique_history_name DIR BASE TS -> a history file name for BASE that is
+# not taken yet, advancing the stamp until it is free. Two writes inside one second
+# are normal when a save follows an adoption, and a name collision would silently
+# drop the older of the two.
+persist_unique_history_name() {
+  local dir="${1}" base="${2}" ts="${3}" name
+  name="$(backup_history_name "${base}" "${ts}")"
+  while [[ -e "${dir}/${name}" ]]; do
+    ts=$(( ts + 1 ))
+    name="$(backup_history_name "${base}" "${ts}")"
+  done
+  printf '%s' "${name}"
+}
+
+# persist_history_dir TARGET -> where TARGET's timestamped saves live. One level
+# below the slot file, so listing and pruning a slot's history never walks over the
+# save directory itself or over another slot.
+persist_history_dir() {
+  printf '%s/history' "$(dirname "${1}")"
+}
+
+# persist_adopt_legacy_save TARGET -> move a pre-history regular file into the
+# history directory and leave the slot pointing at it. Without this the first save
+# after an upgrade would replace the only existing save with a symlink, which is
+# the exact loss this whole design exists to prevent.
+persist_adopt_legacy_save() {
+  local target="${1}" hdir name
+  [[ -f "${target}" && ! -L "${target}" ]] || return 0
+  hdir="$(persist_history_dir "${target}")"
+  mkdir -p "${hdir}" 2>/dev/null || return 0
+  name="$(persist_unique_history_name "${hdir}" "$(backup_history_base "${target}")" "$(_now)")"
+  mv -f "${target}" "${hdir}/${name}" 2>/dev/null || return 0
+  ln -sfn "history/${name}" "${target}" 2>/dev/null || true
   return 0
 }
 
@@ -332,16 +482,26 @@ persist_save() {
     log_error "persist_save" "refused an empty dump over ${target}"
     return 1
   fi
-  if mv -f "${tmp}" "${target}"; then
-    persist_rotate_backups "${target}"
+  persist_adopt_legacy_save "${target}"
+  local hdir name
+  hdir="$(persist_history_dir "${target}")"
+  mkdir -p "${hdir}" 2>/dev/null
+  name="$(persist_unique_history_name "${hdir}" "$(backup_history_base "${target}")" "$(_now)")"
+  if ! mv -f "${tmp}" "${hdir}/${name}"; then
+    rm -f "${tmp}"
     _lock_release "${lock}"
-    _run_hook "$(get_tmux_option "${PERSIST_OPT_POST_SAVE}" "")"
-    return 0
+    log_error "persist_save" "could not write ${hdir}/${name}"
+    return 1
   fi
-  rm -f "${tmp}"
+  if _files_identical "${hdir}/${name}" "${target}"; then
+    rm -f "${hdir}/${name}"
+  else
+    ln -sfn "history/${name}" "${target}" 2>/dev/null || true
+  fi
+  persist_rotate_backups "${target}"
   _lock_release "${lock}"
-  log_error "persist_save" "dump failed"
-  return 1
+  _run_hook "$(get_tmux_option "${PERSIST_OPT_POST_SAVE}" "")"
+  return 0
 }
 
 # --- restore ---------------------------------------------------------------
@@ -551,6 +711,19 @@ persist_doctor() {
   else
     printf 'default save: none yet\n'
   fi
+  local halt agent
+  halt="$(persist_halt_file)"
+  if _file_exists "${halt}"; then
+    printf 'restore:      HALTED by %s\n' "${halt}"
+  else
+    printf 'halt file:    %s (absent)\n' "${halt}"
+  fi
+  agent="$(boot_agent_path "$(_uname)" "${HOME}" "$(persist_boot_label)")"
+  if _file_exists "${agent}"; then
+    printf 'login agent:  installed at %s\n' "${agent}"
+  else
+    printf 'login agent:  not installed\n'
+  fi
   printf 'sensitive:    %s\n' "$(persist_sensitive_list)"
   printf 'replay list:  %s\n' "$(persist_proclist)"
   return 0
@@ -600,6 +773,10 @@ persist_event() {
 # the grace window can suppress the first auto-saves.
 persist_boot() {
   [[ "$(get_tmux_option "${PERSIST_OPT_RESTORE_ON_START}" "off")" == "on" ]] || return 0
+  if _file_exists "$(persist_halt_file)"; then
+    set_tmux_option "${PERSIST_OPT_BOOTED}" "1"
+    return 0
+  fi
   # Restore once per server lifetime, not on every config reload. The entry point
   # runs boot on each plugin load, but a server option survives reloads and resets
   # only when the server dies, so it tells a genuine server start apart from a
@@ -626,7 +803,10 @@ persist_main() {
     preview) shift; persist_preview "$@" ;;
     verify) shift; persist_verify "$@" ;;
     doctor) persist_doctor ;;
-    *) printf 'usage: persist.sh {save|restore|merge|auto|boot|event|slots|pick|preview|verify|doctor}\n' >&2; return 2 ;;
+    boot-install) persist_boot_install ;;
+    boot-uninstall) persist_boot_uninstall ;;
+    boot-sync) persist_boot_sync ;;
+    *) printf 'usage: persist.sh {save|restore|merge|auto|boot|boot-install|boot-uninstall|boot-sync|event|slots|pick|preview|verify|doctor}\n' >&2; return 2 ;;
   esac
 }
 

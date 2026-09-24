@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 #
-# backup.sh: pure rolling-backup rotation. Before a save overwrites a slot, the
-# previous content is copied aside under a timestamped name. These helpers name a
-# backup and decide which old backups to delete so only the newest N survive. The
-# copy and the delete are seams in the dispatcher; the policy lives here. Backup
-# names embed a zero-padded-width epoch, so a lexical sort is a chronological sort.
+# backup.sh: pure naming and pruning for the save history. Every save is written
+# as its own timestamped file under history/, and the slot's path is a symlink
+# pointing at the newest one, so a bad write can never destroy an earlier save and
+# rolling back is repointing the link. These helpers name a history file and decide
+# which old ones to delete so only the newest N survive; the writes and deletes are
+# seams in the dispatcher. Names embed a fixed-width epoch, so a lexical sort is a
+# chronological sort.
 
 [[ -n "${_PERSIST_REVAMPED_BACKUP_LOADED:-}" ]] && return 0
 _PERSIST_REVAMPED_BACKUP_LOADED=1
@@ -12,6 +14,25 @@ _PERSIST_REVAMPED_BACKUP_LOADED=1
 # backup_name TS -> the file name for a backup written at epoch TS.
 backup_name() {
   printf 'last-%s.txt' "${1}"
+}
+
+# backup_history_base TARGET -> the file-name stem a slot's history entries share.
+# "…/last.txt" yields "last" and "…/slots/work.txt" yields "work", so one slot's
+# history can be listed and pruned without touching another's.
+backup_history_base() {
+  local target="${1}" base
+  base="${target##*/}"
+  printf '%s' "${base%.txt}"
+}
+
+# backup_history_name BASE TS -> the history file name for BASE written at epoch TS.
+backup_history_name() {
+  printf '%s-%s.txt' "${1}" "${2}"
+}
+
+# backup_history_glob BASE -> the pattern matching every history entry of BASE.
+backup_history_glob() {
+  printf '%s-*.txt' "${1}"
 }
 
 # backup_prune_list LISTING MAX -> the backup file names in LISTING (one per line)
@@ -40,4 +61,7 @@ backup_prune_list() {
 }
 
 export -f backup_name
+export -f backup_history_base
+export -f backup_history_name
+export -f backup_history_glob
 export -f backup_prune_list
