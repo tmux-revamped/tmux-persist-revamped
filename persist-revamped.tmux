@@ -28,6 +28,11 @@ if [[ -n "${pick_key}" ]]; then
   tmux bind-key "${pick_key}" display-popup -E "bash '${DISPATCH}' pick"
 fi
 
+# Install or remove the login agent to match @persist_revamped_boot. Restoring on
+# server start only helps once a server exists, and on a freshly booted machine
+# nothing has started one until a terminal is opened.
+tmux run-shell -b "bash '${DISPATCH}' boot-sync"
+
 # Restore on start, then stamp the boot time so the grace window can suppress the
 # first auto-saves and avoid clobbering what was just restored.
 tmux run-shell -b "bash '${DISPATCH}' boot"
@@ -48,6 +53,16 @@ fi
 old_worker="$(opt '@persist_revamped_worker_pid' '')"
 if [[ -n "${old_worker}" ]]; then
   kill "${old_worker}" 2>/dev/null || true
+  tmux set-option -gqu '@persist_revamped_worker_pid'
+fi
+
+# An interval of 0 is documented as auto-save off, so honour it here rather than
+# spawning a worker that wakes every minute only to decide it has nothing to do.
+# On a machine that runs a plugin test suite this is the difference between one
+# background process and one per throwaway server.
+interval="$(opt '@persist_revamped_interval' '15')"
+if [[ ! "${interval}" =~ ^[0-9]+$ ]] || (( interval == 0 )); then
+  return 0 2>/dev/null || exit 0
 fi
 
 socket="$(tmux display-message -p '#{socket_path}' 2>/dev/null)"

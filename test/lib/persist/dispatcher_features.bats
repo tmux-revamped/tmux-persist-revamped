@@ -121,32 +121,85 @@ teardown() {
   [[ "${output}" == *"hook echo POST"* ]]
 }
 
-@test "features - save writes no backups when disabled" {
-  _list_windows() { :; }
-  _list_panes() { :; }
+@test "features - save keeps only the current entry when history is disabled" {
+  tmux set-option -gq "@persist_revamped_backups" "0"
+  _list_windows() { printf '%s\n' "main	0	one	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  export MOCK_EPOCH=100
   persist_save
-  [ ! -d "${SAVE}/backups" ]
+  _list_windows() { printf '%s\n' "main	0	two	1	lay0"; }
+  export MOCK_EPOCH=200
+
+  persist_save
+
+  [ "$(ls "${SAVE}/history" | wc -l | tr -d ' ')" -eq 1 ]
+  [[ "$(cat "${SAVE}/last.txt")" == *two* ]]
 }
 
-@test "features - rotate backups keeps the newest and prunes the oldest" {
+@test "features - save keeps the newest entries and prunes the oldest" {
   tmux set-option -gq "@persist_revamped_backups" "2"
-  mkdir -p "${SAVE}/backups"
-  : >"${SAVE}/last.txt"
-  : >"${SAVE}/backups/last-100.txt"
-  : >"${SAVE}/backups/last-200.txt"
-  export MOCK_EPOCH=300
+  mkdir -p "${SAVE}/history"
+  : >"${SAVE}/history/last-100.txt"
+  : >"${SAVE}/history/last-200.txt"
+  : >"${SAVE}/history/last-300.txt"
+  ln -sfn history/last-300.txt "${SAVE}/last.txt"
+
   persist_rotate_backups "${SAVE}/last.txt"
-  [ ! -f "${SAVE}/backups/last-100.txt" ]
-  [ -f "${SAVE}/backups/last-200.txt" ]
-  [ -f "${SAVE}/backups/last-300.txt" ]
+
+  [ ! -f "${SAVE}/history/last-100.txt" ]
+  [ -f "${SAVE}/history/last-200.txt" ]
+  [ -f "${SAVE}/history/last-300.txt" ]
 }
 
-@test "features - rotate backups is a no-op for a non-numeric count" {
+@test "features - a non-numeric history count falls back to the default depth" {
   tmux set-option -gq "@persist_revamped_backups" "lots"
-  mkdir -p "${SAVE}"
-  : >"${SAVE}/last.txt"
+  mkdir -p "${SAVE}/history"
+  local i
+  for i in 1 2 3 4 5 6 7 8; do : >"${SAVE}/history/last-10${i}.txt"; done
+
   persist_rotate_backups "${SAVE}/last.txt"
-  [ ! -d "${SAVE}/backups" ]
+
+  [ "$(ls "${SAVE}/history" | wc -l | tr -d ' ')" -eq 5 ]
+}
+
+@test "features - the slot file is a symlink into the history directory" {
+  _list_windows() { printf '%s\n' "main	0	one	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  export MOCK_EPOCH=100
+
+  persist_save
+
+  [ -L "${SAVE}/last.txt" ]
+  [ -f "${SAVE}/history/last-100.txt" ]
+  [[ "$(cat "${SAVE}/last.txt")" == window* ]]
+}
+
+@test "features - an unchanged environment adds no history entry" {
+  tmux set-option -gq "@persist_revamped_backups" "5"
+  _list_windows() { printf '%s\n' "main	0	one	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  export MOCK_EPOCH=100
+  persist_save
+  export MOCK_EPOCH=200
+
+  persist_save
+
+  [ "$(ls "${SAVE}/history" | wc -l | tr -d ' ')" -eq 1 ]
+  [ -f "${SAVE}/history/last-100.txt" ]
+}
+
+@test "features - a save file written before the history existed is adopted, never lost" {
+  mkdir -p "${SAVE}"
+  printf 'window\tlegacy\n' >"${SAVE}/last.txt"
+  _list_windows() { printf '%s\n' "main	0	new	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  export MOCK_EPOCH=500
+
+  persist_save
+
+  [ -L "${SAVE}/last.txt" ]
+  [[ "$(cat "${SAVE}/history/last-500.txt")" == *legacy* ]]
+  [[ "$(cat "${SAVE}/last.txt")" == *new* ]]
 }
 
 # --- restore hooks, zoom, portable rewrite, vim sessions -------------------
@@ -191,7 +244,7 @@ teardown() {
   tmux set-option -gq "@persist_revamped_rewrite_home" "on"
   HOME="/home/new" persist_restore >"${BATS_TEST_TMPDIR}/p.txt"
   run cat "${BATS_TEST_TMPDIR}/p.txt"
-  [[ "${output}" == *"send-keys -t main:0 cd /home/new/proj Enter"* ]]
+  [[ "${output}" == *"send-keys -t main:0 cd '/home/new/proj' Enter"* ]]
 }
 
 @test "features - restore opens an editor session when Session.vim exists" {
@@ -476,4 +529,182 @@ teardown() {
   persist_restore() { echo "RESTORE $*"; }
   [[ "$(persist_main save work)" == "SAVE work" ]]
   [[ "$(persist_main restore work)" == "RESTORE work" ]]
+}
+
+@test "features - restore on start is skipped while the halt file exists" {
+  tmux set-option -gq "@persist_revamped_restore_on_start" "on"
+  mkdir -p "${SAVE}"
+  persist_join window main 0 e 1 lay0 0 >"${SAVE}/last.txt"
+  : >"${SAVE}/no-restore"
+
+  run persist_boot
+
+  [[ "${output}" != *"new-session"* ]]
+}
+
+@test "features - restore on start runs when the halt file is gone" {
+  tmux set-option -gq "@persist_revamped_restore_on_start" "on"
+  mkdir -p "${SAVE}"
+  persist_join window main 0 e 1 lay0 0 >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+
+  run persist_boot
+
+  [[ "${output}" == *"new-session"* ]]
+}
+
+@test "features - the halt file honours an explicit path" {
+  tmux set-option -gq "@persist_revamped_halt_file" "/tmp/skip-restore-once"
+
+  run persist_halt_file
+
+  [[ "${output}" == "/tmp/skip-restore-once" ]]
+}
+
+@test "features - the halt file defaults into the save directory" {
+  run persist_halt_file
+
+  [[ "${output}" == "${SAVE}/no-restore" ]]
+}
+
+@test "features - a halted boot still marks the server as booted" {
+  tmux set-option -gq "@persist_revamped_restore_on_start" "on"
+  mkdir -p "${SAVE}"
+  : >"${SAVE}/no-restore"
+  persist_boot
+
+  run tmux show-option -gqv "@persist_revamped_booted"
+
+  [[ "${output}" == "1" ]]
+}
+
+@test "features - boot sync installs the login agent when the option is on" {
+  tmux set-option -gq "@persist_revamped_boot" "on"
+  local installed=""
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _write_file() { installed="${1}"; printf '%s' "${2}" >"${BATS_TEST_TMPDIR}/agent"; }
+  _agent_load() { printf 'load %s\n' "${3}"; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_install
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"${BATS_TEST_TMPDIR}/.config/systemd/user/tmux-persist-revamped.service"* ]]
+}
+
+@test "features - boot install fails cleanly when tmux is not on PATH" {
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf ''; }
+
+  run persist_boot_install
+
+  [ "${status}" -ne 0 ]
+}
+
+@test "features - boot uninstall removes an installed agent" {
+  local agent="${BATS_TEST_TMPDIR}/.config/systemd/user/tmux-persist-revamped.service"
+  mkdir -p "$(dirname "${agent}")"
+  : >"${agent}"
+  _uname() { printf 'Linux'; }
+  _agent_unload() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_uninstall
+
+  [ "${status}" -eq 0 ]
+  [ ! -e "${agent}" ]
+}
+
+@test "features - an invalid boot label falls back to the plugin name" {
+  tmux set-option -gq "@persist_revamped_boot_label" "../escape"
+
+  run persist_boot_label
+
+  [[ "${output}" == "tmux-persist-revamped" ]]
+}
+
+@test "features - boot install on macOS writes a launch agent plist" {
+  _uname() { printf 'Darwin'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_install
+
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/Library/LaunchAgents/tmux-persist-revamped.plist")" == *"<key>RunAtLoad</key>"* ]]
+}
+
+@test "features - boot install honours a custom label and command" {
+  tmux set-option -gq "@persist_revamped_boot_label" "my-tmux"
+  tmux set-option -gq "@persist_revamped_boot_command" "new-session -d -s work"
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_install
+
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/.config/systemd/user/my-tmux.service")" == *"new-session -d -s work"* ]]
+}
+
+@test "features - boot install fails when the agent cannot be written" {
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  local blocker="${BATS_TEST_TMPDIR}/blocked"
+  : >"${blocker}"
+  HOME="${blocker}"
+
+  run persist_boot_install
+
+  [ "${status}" -ne 0 ]
+}
+
+@test "features - boot uninstall is a no-op when no agent is installed" {
+  _uname() { printf 'Linux'; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_uninstall
+
+  [ "${status}" -eq 0 ]
+  [[ -z "${output}" ]]
+}
+
+@test "features - boot sync installs when on and removes when off" {
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  _agent_unload() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+  local agent="${BATS_TEST_TMPDIR}/.config/systemd/user/tmux-persist-revamped.service"
+  tmux set-option -gq "@persist_revamped_boot" "on"
+
+  persist_boot_sync
+
+  [ -f "${agent}" ]
+
+  tmux set-option -gq "@persist_revamped_boot" "off"
+
+  persist_boot_sync
+
+  [ ! -e "${agent}" ]
+}
+
+@test "features - the dispatcher routes the boot agent commands" {
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  _agent_unload() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_main boot-install
+  [ "${status}" -eq 0 ]
+
+  run persist_main boot-sync
+  [ "${status}" -eq 0 ]
+
+  run persist_main boot-uninstall
+  [ "${status}" -eq 0 ]
 }

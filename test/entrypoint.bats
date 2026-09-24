@@ -58,3 +58,24 @@ run_entry() {
 
   [[ "${output}" =~ ^[0-9]+$ ]]
 }
+
+@test "entry point - starts no worker when auto-save is off" {
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_interval' '0'
+
+  run_entry
+  sleep 0.3
+
+  run command tmux -S "${SOCKET}" show-option -gqv '@persist_revamped_worker_pid'
+
+  [[ -z "${output}" ]]
+}
+
+@test "entry point - still binds the save and restore keys with auto-save off" {
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_interval' '0'
+
+  run_entry
+
+  run command tmux -S "${SOCKET}" list-keys -T prefix
+  [[ "${output}" == *"persist.sh' save"* ]]
+  [[ "${output}" == *"persist.sh' restore"* ]]
+}
