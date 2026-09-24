@@ -88,17 +88,33 @@ teardown() {
 }
 
 @test "transform - shell_quote wraps a plain path in single quotes" {
-  [[ "$(transform_shell_quote /home/me/work)" == "'/home/me/work'" ]]
+  local q="'"
+
+  run transform_shell_quote /home/me/work
+
+  [ "${output}" = "${q}/home/me/work${q}" ]
 }
 
 @test "transform - shell_quote keeps a path with spaces as one word" {
-  [[ "$(transform_shell_quote "/home/me/@ Pessoal/fdstoolkit")" == "'/home/me/@ Pessoal/fdstoolkit'" ]]
+  local q="'"
+
+  run transform_shell_quote "/home/me/@ Pessoal/fdstoolkit"
+
+  [ "${output}" = "${q}/home/me/@ Pessoal/fdstoolkit${q}" ]
 }
 
 @test "transform - shell_quote escapes an embedded single quote" {
-  [[ "$(transform_shell_quote "/home/me/it's here")" == "'/home/me/it'\\''s here'" ]]
+  local q="'"
+
+  run transform_shell_quote "/home/me/it${q}s here"
+
+  [ "${output}" = "${q}/home/me/it${q}\\${q}${q}s here${q}" ]
 }
 
 @test "transform - shell_quote neutralises glob and expansion characters" {
-  [[ "$(transform_shell_quote '/home/me/$HOME *?[a] `x`')" == "'/home/me/\$HOME *?[a] \`x\`'" ]]
+  local q="'"
+
+  run transform_shell_quote '/home/me/$HOME *?[a] `x`'
+
+  [ "${output}" = "${q}"'/home/me/$HOME *?[a] `x`'"${q}" ]
 }
