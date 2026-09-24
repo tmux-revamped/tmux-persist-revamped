@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A save no longer replaces a populated save file with an empty one. A dump is
+  empty whenever the server holds no session, which happens while a server starts
+  and while it closes its last session, so a close-event save could wipe the
+  environment it was meant to protect.
+- Saves are scoped to the server that wrote them. Only the default socket writes
+  to the top of the save directory; any other server writes under
+  `servers/<socket>/`. Every tmux server on a machine reads the same config, so
+  without this one server's state overwrites another's.
+- One save at a time. A lock around the write stops two saves from interleaving,
+  and a lock left by a killed save is taken over after two minutes.
+- No auto-save worker is started when `@persist_revamped_interval` is `0`, which
+  is documented as auto-save off. The worker used to spawn anyway and wake every
+  minute to decide it had nothing to do.
+
+### Added
+
+- `@persist_revamped_scope_socket`, on by default, to turn per-server scoping off
+  for someone who deliberately shares one save across sockets.
+- `@persist_revamped_dir` now expands a leading `~`, `$HOME` and `$HOSTNAME`, so
+  the option can be written the way a path is normally written and one config can
+  give each host its own directory.
+
 ## [1.3.0] - 2026-06-30
 
 ### Added

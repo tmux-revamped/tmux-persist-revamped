@@ -354,3 +354,87 @@ teardown() {
   run _capture_pane "main:0"
   true
 }
+
+@test "dispatcher - save dir gives a non-default socket its own subdirectory" {
+  _socket_path() { printf '/tmp/tiling-test-4-2'; }
+
+  run persist_save_dir
+
+  [[ "${output}" == "${SAVE}/servers/tiling-test-4-2" ]]
+}
+
+@test "dispatcher - save dir stays flat when socket scoping is off" {
+  _socket_path() { printf '/tmp/tiling-test-4-2'; }
+  tmux set-option -gq "@persist_revamped_scope_socket" "off"
+
+  run persist_save_dir
+
+  [[ "${output}" == "${SAVE}" ]]
+}
+
+@test "dispatcher - save dir expands a tilde in the option" {
+  tmux set-option -gq "@persist_revamped_dir" "~/state/persist"
+
+  run persist_save_dir
+
+  [[ "${output}" == "${HOME}/state/persist" ]]
+}
+
+@test "dispatcher - save refuses to replace a populated save with an empty dump" {
+  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  persist_save
+  local before
+  before="$(cat "${SAVE}/last.txt")"
+  _list_windows() { printf ''; }
+  _list_panes() { printf ''; }
+
+  run persist_save
+
+  [ "${status}" -ne 0 ]
+  [[ "$(cat "${SAVE}/last.txt")" == "${before}" ]]
+}
+
+@test "dispatcher - save writes an empty dump when there is nothing to lose" {
+  _list_windows() { printf ''; }
+  _list_panes() { printf ''; }
+
+  run persist_save
+
+  [ "${status}" -eq 0 ]
+  [ -f "${SAVE}/last.txt" ]
+}
+
+@test "dispatcher - save refuses to run while another save holds the lock" {
+  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  mkdir -p "${SAVE}/.save.lock"
+
+  run persist_save
+
+  [ "${status}" -ne 0 ]
+  [ ! -f "${SAVE}/last.txt" ]
+}
+
+@test "dispatcher - save takes over a lock left behind by a killed save" {
+  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  mkdir -p "${SAVE}/.save.lock"
+  touch -t 197001010000 "${SAVE}/.save.lock"
+
+  run persist_save
+
+  [ "${status}" -eq 0 ]
+  [ -f "${SAVE}/last.txt" ]
+}
+
+@test "dispatcher - save releases the lock so the next save can run" {
+  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
+  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  persist_save
+
+  run persist_save
+
+  [ "${status}" -eq 0 ]
+  [ ! -d "${SAVE}/.save.lock" ]
+}

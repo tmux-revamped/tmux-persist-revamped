@@ -40,6 +40,18 @@ schema_header_field() {
   return 0
 }
 
+# schema_replacement_allowed NEW OLD -> success unless NEW holds no window records
+# while OLD holds some. A dump is empty whenever the server has no session, which
+# happens while a server is starting and while it is closing its last session, and
+# an empty dump written over a populated save destroys the environment it was meant
+# to protect. Both empty is allowed, since there is nothing to lose.
+schema_replacement_allowed() {
+  local new="${1}" old="${2}"
+  [[ "$(schema_count_kind "${new}" "window")" -gt 0 ]] && return 0
+  [[ "$(schema_count_kind "${old}" "window")" -gt 0 ]] && return 1
+  return 0
+}
+
 # schema_stale TS NOW MAX_SECONDS -> success when the save is older than MAX_SECONDS.
 # A MAX_SECONDS of zero or less disables the staleness check (never stale).
 schema_stale() {
@@ -51,3 +63,4 @@ schema_stale() {
 export -f schema_count_kind
 export -f schema_header_field
 export -f schema_stale
+export -f schema_replacement_allowed

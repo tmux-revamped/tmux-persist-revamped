@@ -25,6 +25,19 @@ line stays yours and saving does not depend on how often the bar refreshes. Afte
 restore on server start, a short grace window holds auto-save off so it cannot
 overwrite what was just brought back.
 
+Saves are scoped to the server that wrote them. tmux names its socket `default`
+unless `-L` or `-S` says otherwise, and every other name identifies a different
+environment, so those servers save under `servers/<socket>/` instead of over the
+default server's file. This matters more than it sounds: any tmux server on the
+machine reads the same `~/.tmux.conf`, including the throwaway ones a test suite
+starts, and without scoping the last one to tick wins.
+
+A save also never replaces a populated file with an empty one. A dump is empty
+whenever the server holds no session, which is true while a server is starting and
+again while it is closing its last session, and writing that over a good save
+destroys the environment the plugin exists to protect. One save runs at a time,
+behind a lock that a killed save cannot hold for more than two minutes.
+
 The save file uses an escaped field format read under a fixed locale, so an empty
 pane title, a tab inside a value, or a path with spaces round-trips without
 corrupting the record. Counting other tmux servers reads the socket directory
@@ -62,7 +75,8 @@ Run any of these as `bash <plugin>/src/persist.sh <command>`, or bind them to ke
 | `@persist_revamped_save_key` | `C-s` | key that triggers a manual save |
 | `@persist_revamped_restore_key` | `C-r` | key that triggers a restore |
 | `@persist_revamped_interval` | `15` | auto-save interval in minutes; `0` turns auto-save off |
-| `@persist_revamped_dir` | `$XDG_STATE_HOME/tmux/persist` | where saves are written |
+| `@persist_revamped_dir` | `$XDG_STATE_HOME/tmux/persist` | where saves are written; a leading `~`, `$HOME` and `$HOSTNAME` are expanded |
+| `@persist_revamped_scope_socket` | `on` | give every server other than the default socket its own save directory |
 | `@persist_revamped_processes` | empty | extra programs to replay on restore, appended to the built-in list |
 | `@persist_revamped_capture_panes` | `off` | set to `on` to save each pane's visible text and repaint it on restore; trailing blank lines are trimmed so the real output stays on screen |
 | `@persist_revamped_capture_args` | `off` | set to `on` to save the full command line of each restorable program and replay it with its arguments, for example `vim src/app.ts` instead of bare `vim`; falls back to the bare command when the arguments cannot be resolved |
