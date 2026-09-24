@@ -36,14 +36,17 @@ source "${PLUGIN_DIR}/src/lib/tmux/tmux-ops.sh"
 source "${PLUGIN_DIR}/src/lib/utils/has-command.sh"
 # shellcheck source=/dev/null
 source "${PLUGIN_DIR}/src/lib/utils/error-logger.sh"
+# shellcheck source=/dev/null
+source "${PLUGIN_DIR}/src/persist-boot.sh"
+# shellcheck source=/dev/null
+source "${PLUGIN_DIR}/src/persist-restore.sh"
+# shellcheck source=/dev/null
+source "${PLUGIN_DIR}/src/persist-report.sh"
 
 readonly PERSIST_OPT_INTERVAL="@persist_revamped_interval"
 readonly PERSIST_OPT_DIR="@persist_revamped_dir"
 readonly PERSIST_OPT_SCOPE_SOCKET="@persist_revamped_scope_socket"
 readonly PERSIST_OPT_HALT_FILE="@persist_revamped_halt_file"
-readonly PERSIST_OPT_BOOT="@persist_revamped_boot"
-readonly PERSIST_OPT_BOOT_COMMAND="@persist_revamped_boot_command"
-readonly PERSIST_OPT_BOOT_LABEL="@persist_revamped_boot_label"
 readonly PERSIST_OPT_PROCESSES="@persist_revamped_processes"
 readonly PERSIST_OPT_RESTORE_ON_START="@persist_revamped_restore_on_start"
 readonly PERSIST_OPT_BOOT_GRACE="@persist_revamped_boot_grace"
@@ -53,16 +56,11 @@ readonly PERSIST_OPT_BOOTED="@persist_revamped_booted"
 readonly PERSIST_OPT_CAPTURE="@persist_revamped_capture_panes"
 readonly PERSIST_OPT_CAPTURE_ARGS="@persist_revamped_capture_args"
 readonly PERSIST_OPT_REDACT="@persist_revamped_redact"
-readonly PERSIST_OPT_REWRITE="@persist_revamped_rewrite_home"
-readonly PERSIST_OPT_VIM_SESSIONS="@persist_revamped_vim_sessions"
 readonly PERSIST_OPT_BACKUPS="@persist_revamped_backups"
 readonly PERSIST_OPT_EVENT_DEBOUNCE="@persist_revamped_event_debounce"
 readonly PERSIST_OPT_EVENT_TS="@persist_revamped_event_ts"
-readonly PERSIST_OPT_STALE_SECS="@persist_revamped_stale_secs"
 readonly PERSIST_OPT_PRE_SAVE="@persist_revamped_pre_save_hook"
 readonly PERSIST_OPT_POST_SAVE="@persist_revamped_post_save_hook"
-readonly PERSIST_OPT_PRE_RESTORE="@persist_revamped_pre_restore_hook"
-readonly PERSIST_OPT_POST_RESTORE="@persist_revamped_post_restore_hook"
 
 # --- tmux seams (tests override these) -------------------------------------
 
@@ -86,43 +84,6 @@ _socket_path() {
 # _hostname -> this host's name, for expanding $HOSTNAME in the save directory.
 _hostname() {
   hostname 2>/dev/null
-}
-
-_uname() {
-  uname -s 2>/dev/null
-}
-
-_tmux_bin() {
-  command -v tmux 2>/dev/null
-}
-
-_write_file() {
-  local path="${1}" content="${2}"
-  mkdir -p "$(dirname "${path}")" 2>/dev/null || return 1
-  printf '%s' "${content}" >"${path}" 2>/dev/null
-}
-
-_agent_load() {
-  local os="${1}" path="${2}" label="${3}"
-  if [[ "${os}" == "Darwin" ]]; then
-    launchctl unload "${path}" >/dev/null 2>&1
-    launchctl load "${path}" >/dev/null 2>&1
-  else
-    systemctl --user daemon-reload >/dev/null 2>&1
-    systemctl --user enable "${label}" >/dev/null 2>&1
-  fi
-  return 0
-}
-
-_agent_unload() {
-  local os="${1}" path="${2}" label="${3}"
-  if [[ "${os}" == "Darwin" ]]; then
-    launchctl unload "${path}" >/dev/null 2>&1
-  else
-    systemctl --user disable "${label}" >/dev/null 2>&1
-    systemctl --user daemon-reload >/dev/null 2>&1
-  fi
-  return 0
 }
 
 # _lock_acquire PATH -> success when this process took the save lock. mkdir is the
@@ -302,53 +263,6 @@ persist_halt_file() {
   printf '%s/no-restore' "$(persist_save_dir)"
 }
 
-persist_boot_label() {
-  local label
-  label="$(get_tmux_option "${PERSIST_OPT_BOOT_LABEL}" "tmux-persist-revamped")"
-  boot_label_valid "${label}" || label="tmux-persist-revamped"
-  printf '%s' "${label}"
-}
-
-persist_boot_install() {
-  local os home label path bin args content
-  os="$(_uname)"
-  home="${HOME}"
-  label="$(persist_boot_label)"
-  path="$(boot_agent_path "${os}" "${home}" "${label}")"
-  bin="$(_tmux_bin)"
-  [[ -n "${bin}" ]] || { log_error "persist_boot_install" "no tmux on PATH"; return 1; }
-  args="$(get_tmux_option "${PERSIST_OPT_BOOT_COMMAND}" "new-session -d")"
-  if [[ "${os}" == "Darwin" ]]; then
-    content="$(boot_plist "${label}" "${bin}" "${args}")"
-  else
-    content="$(boot_unit "${bin}" "${args}")"
-  fi
-  _write_file "${path}" "${content}" || { log_error "persist_boot_install" "could not write ${path}"; return 1; }
-  _agent_load "${os}" "${path}" "${label}"
-  printf '%s\n' "${path}"
-}
-
-persist_boot_uninstall() {
-  local os home label path
-  os="$(_uname)"
-  home="${HOME}"
-  label="$(persist_boot_label)"
-  path="$(boot_agent_path "${os}" "${home}" "${label}")"
-  [[ -e "${path}" ]] || return 0
-  _agent_unload "${os}" "${path}" "${label}"
-  rm -f "${path}"
-  printf '%s\n' "${path}"
-}
-
-persist_boot_sync() {
-  if [[ "$(get_tmux_option "${PERSIST_OPT_BOOT}" "off")" == "on" ]]; then
-    persist_boot_install >/dev/null
-  else
-    persist_boot_uninstall >/dev/null
-  fi
-  return 0
-}
-
 persist_proclist() {
   local extra
   extra="$(get_tmux_option "${PERSIST_OPT_PROCESSES}" "")"
@@ -506,228 +420,7 @@ persist_save() {
 
 # --- restore ---------------------------------------------------------------
 
-# _read_fields LINE -> populate the global FIELDS array with the record's fields.
-_read_fields() {
-  FIELDS=()
-  local f
-  while IFS= read -r f; do
-    FIELDS+=("$(persist_unescape "${f}")")
-  done < <(persist_split "${1}")
-}
-
-# persist_restore [SLOT] [SESSION_FILTER] -> rebuild the session tree from SLOT's
-# file (last.txt by default): create sessions and windows, split out extra panes,
-# restore each pane's directory, reapply the layout and zoom, and replay an
-# allow-listed foreground program. SESSION_FILTER, when set, restores only that one
-# session (selective merge). Returns non-zero when there is nothing to load.
-persist_restore() {
-  local slot="${1:-}" filter="${2:-}"
-  local dir file line proclist seen=""
-  dir="$(persist_save_dir)"
-  file="$(slots_file "${dir}" "${slot}")"
-  [[ -f "${file}" ]] || return 1
-  proclist="$(persist_proclist)"
-  _run_hook "$(get_tmux_option "${PERSIST_OPT_PRE_RESTORE}" "")"
-  local rewrite vim_sessions old_home new_home="${HOME}"
-  rewrite="$(get_tmux_option "${PERSIST_OPT_REWRITE}" "off")"
-  vim_sessions="$(get_tmux_option "${PERSIST_OPT_VIM_SESSIONS}" "off")"
-  old_home=""
-  [[ "${rewrite}" == "on" ]] && old_home="$(schema_header_field "$(cat "${file}")" 3)"
-  while IFS= read -r line; do
-    [[ "${line}" == window* ]] || continue
-    _read_fields "${line}"
-    local s="${FIELDS[1]}" wn="${FIELDS[3]}"
-    transform_keep_session "${s}" "${filter}" || continue
-    if _has_session "${s}"; then
-      _tmux new-window -t "${s}:" -n "${wn}"
-    else
-      _tmux new-session -d -s "${s}" -n "${wn}"
-    fi
-  done <"${file}"
-  while IFS= read -r line; do
-    [[ "${line}" == pane* ]] || continue
-    _read_fields "${line}"
-    local s="${FIELDS[1]}" wi="${FIELDS[2]}" pp="${FIELDS[5]}" pc="${FIELDS[6]}"
-    transform_keep_session "${s}" "${filter}" || continue
-    local key="${s}:${wi}"
-    if [[ " ${seen} " == *" ${key} "* ]]; then
-      _tmux split-window -t "${key}"
-    else
-      seen="${seen} ${key}"
-    fi
-    # Never type into a pane that is not a shell. A restore against a live server
-    # can resolve to a window that already runs a program, and sending keys there
-    # would inject commands into it. Skip the directory, repaint, and program
-    # replay for any such pane.
-    is_shell_cmd "$(_pane_current_command "${key}")" || continue
-    local rpp="${pp}"
-    [[ "${rewrite}" == "on" ]] && rpp="$(transform_rewrite_path "${pp}" "${old_home}" "${new_home}")"
-    _tmux send-keys -t "${key}" "cd ${rpp}" Enter
-    local content="${FIELDS[7]:-}"
-    [[ -n "${content}" ]] && _repaint_pane "${key}" "${content}"
-    local full="${FIELDS[8]:-}"
-    if [[ "${vim_sessions}" == "on" ]] && vimsession_is_editor "${pc}" && _file_exists "${rpp}/$(vimsession_file)"; then
-      _tmux send-keys -t "${key}" "$(vimsession_command "${pc}")" Enter
-    elif strategy_match "${pc}" "${proclist}"; then
-      _tmux send-keys -t "${key}" "$(strategy_restore_command "${pc}" "${full}")" Enter
-    fi
-  done <"${file}"
-  while IFS= read -r line; do
-    [[ "${line}" == window* ]] || continue
-    _read_fields "${line}"
-    local s="${FIELDS[1]}" wi="${FIELDS[2]}" wa="${FIELDS[4]}" wl="${FIELDS[5]}"
-    transform_keep_session "${s}" "${filter}" || continue
-    [[ -n "${wl}" ]] && _tmux select-layout -t "${s}:${wi}" "${wl}"
-    [[ "${wa}" == "1" ]] && _tmux select-window -t "${s}:${wi}"
-  done <"${file}"
-  while IFS= read -r line; do
-    [[ "${line}" == pane* ]] || continue
-    _read_fields "${line}"
-    local s="${FIELDS[1]}" wi="${FIELDS[2]}" pi="${FIELDS[3]}" pa="${FIELDS[4]}"
-    transform_keep_session "${s}" "${filter}" || continue
-    [[ "${pa}" == "1" ]] && _tmux select-pane -t "${s}:${wi}.${pi}"
-  done <"${file}"
-  while IFS= read -r line; do
-    [[ "${line}" == window* ]] || continue
-    _read_fields "${line}"
-    local s="${FIELDS[1]}" wi="${FIELDS[2]}" wz="${FIELDS[6]:-}"
-    transform_keep_session "${s}" "${filter}" || continue
-    [[ "${wz}" == "1" ]] && _tmux resize-pane -Z -t "${s}:${wi}"
-  done <"${file}"
-  _run_hook "$(get_tmux_option "${PERSIST_OPT_POST_RESTORE}" "")"
-  return 0
-}
-
-# persist_merge SESSION [SLOT] -> restore only SESSION from a save, and never when
-# that session already exists, so a running environment is never clobbered.
-persist_merge() {
-  local sess="${1:-}" slot="${2:-}"
-  if [[ -z "${sess}" ]]; then
-    printf 'usage: persist.sh merge <session> [slot]\n' >&2
-    return 2
-  fi
-  if _has_session "${sess}"; then
-    return 0
-  fi
-  persist_restore "${slot}" "${sess}"
-}
-
 # --- slots and inspection --------------------------------------------------
-
-# persist_slots -> the names of the saved slots, one per line.
-persist_slots() {
-  local dir
-  dir="$(persist_save_dir)"
-  slots_parse_listing "$(_list_dir "${dir}/slots" '*.txt')"
-}
-
-# persist_pick -> let the user pick a slot through fzf and restore it. Returns
-# non-zero when there are no slots or the pick is cancelled.
-persist_pick() {
-  local list choice
-  list="$(persist_slots)"
-  [[ -n "${list}" ]] || return 1
-  choice="$(printf '%s\n' "${list}" | _fzf)" || return 1
-  [[ -n "${choice}" ]] || return 1
-  persist_restore "${choice}"
-}
-
-# persist_preview [SLOT] -> a human summary of what a save holds, without touching
-# the live server. Returns non-zero when the save is missing.
-persist_preview() {
-  local slot="${1:-}" dir file content
-  dir="$(persist_save_dir)"
-  file="$(slots_file "${dir}" "${slot}")"
-  if [[ ! -f "${file}" ]]; then
-    printf 'no save at %s\n' "${file}"
-    return 1
-  fi
-  content="$(cat "${file}")"
-  printf 'save:    %s\n' "${file}"
-  printf 'schema:  %s\n' "$(schema_header_field "${content}" 2)"
-  printf 'origin:  %s\n' "$(schema_header_field "${content}" 3)"
-  printf 'windows: %s\n' "$(schema_count_kind "${content}" window)"
-  printf 'panes:   %s\n' "$(schema_count_kind "${content}" pane)"
-  return 0
-}
-
-# persist_verify [SLOT] -> check a save's integrity: it exists, carries a schema
-# header, holds at least one window, and is not stale. Prints findings and returns
-# non-zero when anything is wrong.
-persist_verify() {
-  local slot="${1:-}" dir file content windows panes ver ts now max rc=0
-  dir="$(persist_save_dir)"
-  file="$(slots_file "${dir}" "${slot}")"
-  if [[ ! -f "${file}" ]]; then
-    printf 'FAIL no save file at %s\n' "${file}"
-    return 1
-  fi
-  content="$(cat "${file}")"
-  windows="$(schema_count_kind "${content}" window)"
-  panes="$(schema_count_kind "${content}" pane)"
-  ver="$(schema_header_field "${content}" 2)"
-  ts="$(schema_header_field "${content}" 4)"
-  if [[ -n "${ver}" ]]; then
-    printf 'OK   schema version %s\n' "${ver}"
-  else
-    printf 'WARN no schema header (legacy save)\n'
-    rc=1
-  fi
-  if (( windows > 0 )); then
-    printf 'OK   %s window record(s)\n' "${windows}"
-  else
-    printf 'FAIL no window records\n'
-    rc=1
-  fi
-  printf 'OK   %s pane record(s)\n' "${panes}"
-  now="$(_now)"
-  max="$(get_tmux_option "${PERSIST_OPT_STALE_SECS}" "0")"
-  if [[ -n "${ts}" ]] && schema_stale "${ts}" "${now}" "${max}"; then
-    printf 'WARN save is stale (older than %ss)\n' "${max}"
-    rc=1
-  fi
-  return "${rc}"
-}
-
-# persist_doctor -> report what the plugin found on this host and why a feature may
-# be inert: tmux and fzf presence, the save directory, and the active lists.
-persist_doctor() {
-  local dir
-  dir="$(persist_save_dir)"
-  printf 'tmux-persist-revamped doctor\n'
-  printf 'save dir:     %s\n' "${dir}"
-  if has_command tmux; then
-    printf 'tmux:         found\n'
-  else
-    printf 'tmux:         MISSING\n'
-  fi
-  if has_command fzf; then
-    printf 'fzf:          found (slot picker enabled)\n'
-  else
-    printf 'fzf:          missing (slot picker disabled)\n'
-  fi
-  if _file_exists "$(slots_file "${dir}" "")"; then
-    printf 'default save: present\n'
-  else
-    printf 'default save: none yet\n'
-  fi
-  local halt agent
-  halt="$(persist_halt_file)"
-  if _file_exists "${halt}"; then
-    printf 'restore:      HALTED by %s\n' "${halt}"
-  else
-    printf 'halt file:    %s (absent)\n' "${halt}"
-  fi
-  agent="$(boot_agent_path "$(_uname)" "${HOME}" "$(persist_boot_label)")"
-  if _file_exists "${agent}"; then
-    printf 'login agent:  installed at %s\n' "${agent}"
-  else
-    printf 'login agent:  not installed\n'
-  fi
-  printf 'sensitive:    %s\n' "$(persist_sensitive_list)"
-  printf 'replay list:  %s\n' "$(persist_proclist)"
-  return 0
-}
 
 # --- automation ------------------------------------------------------------
 
