@@ -39,3 +39,24 @@ teardown() {
   run servers_other_exist "default" "default"
   [ "${status}" -eq 1 ]
 }
+
+@test "servers - socket label is the socket base name" {
+  [[ "$(servers_socket_label /private/tmp/tmux-501/default)" == "default" ]]
+  [[ "$(servers_socket_label /tmp/tiling-test-4-2)" == "tiling-test-4-2" ]]
+}
+
+@test "servers - socket label collapses characters that could escape the directory" {
+  [[ "$(servers_socket_label "/tmp/a b/../weird name")" == "weird_name" ]]
+}
+
+@test "servers - socket label falls back to default for an empty path" {
+  [[ "$(servers_socket_label "")" == "default" ]]
+}
+
+@test "servers - scope dir leaves the default socket where it is" {
+  [[ "$(servers_scope_dir /state/persist default)" == "/state/persist" ]]
+}
+
+@test "servers - scope dir gives any other server its own subdirectory" {
+  [[ "$(servers_scope_dir /state/persist work)" == "/state/persist/servers/work" ]]
+}

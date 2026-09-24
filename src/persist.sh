@@ -37,6 +37,7 @@ source "${PLUGIN_DIR}/src/lib/utils/error-logger.sh"
 
 readonly PERSIST_OPT_INTERVAL="@persist_revamped_interval"
 readonly PERSIST_OPT_DIR="@persist_revamped_dir"
+readonly PERSIST_OPT_SCOPE_SOCKET="@persist_revamped_scope_socket"
 readonly PERSIST_OPT_PROCESSES="@persist_revamped_processes"
 readonly PERSIST_OPT_RESTORE_ON_START="@persist_revamped_restore_on_start"
 readonly PERSIST_OPT_BOOT_GRACE="@persist_revamped_boot_grace"
@@ -68,6 +69,33 @@ _tmux() {
 }
 
 _now() { date +%s; }
+
+# _socket_path -> the socket of the server this call is talking to. tmux answers
+# "default" unless the server was started with -L or -S, so the value identifies
+# the environment the save belongs to.
+_socket_path() {
+  command tmux display-message -p '#{socket_path}' 2>/dev/null
+}
+
+# _hostname -> this host's name, for expanding $HOSTNAME in the save directory.
+_hostname() {
+  hostname 2>/dev/null
+}
+
+# _lock_acquire PATH -> success when this process took the save lock. mkdir is the
+# atomic primitive available everywhere. A lock left behind by a killed save is
+# taken over once it is older than two minutes, which is far longer than a save.
+_lock_acquire() {
+  local lock="${1}"
+  mkdir "${lock}" 2>/dev/null && return 0
+  [[ -n "$(find "${lock}" -maxdepth 0 -mmin +2 2>/dev/null)" ]] || return 1
+  rmdir "${lock}" 2>/dev/null || return 1
+  mkdir "${lock}" 2>/dev/null
+}
+
+_lock_release() {
+  rmdir "${1}" 2>/dev/null || true
+}
 
 _list_windows() {
   command tmux list-windows -a -F \
@@ -190,13 +218,20 @@ _repaint_pane() {
 # --- options ---------------------------------------------------------------
 
 persist_save_dir() {
-  local custom
+  local custom base scope label
   custom="$(get_tmux_option "${PERSIST_OPT_DIR}" "")"
   if [[ -n "${custom}" ]]; then
-    printf '%s' "${custom}"
+    base="$(transform_expand_path "${custom}" "${HOME}" "$(_hostname)")"
+  else
+    base="${XDG_STATE_HOME:-${HOME}/.local/state}/tmux/persist"
+  fi
+  scope="$(get_tmux_option "${PERSIST_OPT_SCOPE_SOCKET}" "on")"
+  if [[ "${scope}" != "on" ]]; then
+    printf '%s' "${base}"
     return 0
   fi
-  printf '%s/tmux/persist' "${XDG_STATE_HOME:-${HOME}/.local/state}"
+  label="$(servers_socket_label "$(_socket_path)")"
+  servers_scope_dir "${base}" "${label}"
 }
 
 persist_proclist() {
@@ -281,14 +316,30 @@ persist_save() {
   tdir="$(dirname "${target}")"
   mkdir -p "${tdir}" 2>/dev/null || { log_error "persist_save" "mkdir ${tdir} failed"; return 1; }
   chmod 0700 "${dir}" 2>/dev/null
+  local lock="${dir}/.save.lock"
+  _lock_acquire "${lock}" || { log_error "persist_save" "another save holds ${lock}"; return 1; }
   _run_hook "$(get_tmux_option "${PERSIST_OPT_PRE_SAVE}" "")"
-  tmp="$(_mktemp "${tdir}")" || { log_error "persist_save" "mktemp in ${tdir} failed"; return 1; }
-  if persist_dump >"${tmp}" 2>/dev/null && mv -f "${tmp}" "${target}"; then
+  tmp="$(_mktemp "${tdir}")" || { _lock_release "${lock}"; log_error "persist_save" "mktemp in ${tdir} failed"; return 1; }
+  if ! persist_dump >"${tmp}" 2>/dev/null; then
+    rm -f "${tmp}"
+    _lock_release "${lock}"
+    log_error "persist_save" "dump failed"
+    return 1
+  fi
+  if ! schema_replacement_allowed "$(cat "${tmp}" 2>/dev/null)" "$(cat "${target}" 2>/dev/null)"; then
+    rm -f "${tmp}"
+    _lock_release "${lock}"
+    log_error "persist_save" "refused an empty dump over ${target}"
+    return 1
+  fi
+  if mv -f "${tmp}" "${target}"; then
     persist_rotate_backups "${target}"
+    _lock_release "${lock}"
     _run_hook "$(get_tmux_option "${PERSIST_OPT_POST_SAVE}" "")"
     return 0
   fi
   rm -f "${tmp}"
+  _lock_release "${lock}"
   log_error "persist_save" "dump failed"
   return 1
 }

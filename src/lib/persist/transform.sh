@@ -20,6 +20,23 @@ transform_default_sensitive() {
   printf '%s' "ssh sudo su vault gpg pass op ssh-add openssl"
 }
 
+# transform_expand_path PATH HOME HOSTNAME -> PATH with a leading tilde, and any
+# occurrence of $HOME or $HOSTNAME, replaced by the given values. A tmux option is
+# stored verbatim, so a directory written as "~/state" reaches the plugin as four
+# literal characters and names nothing. Expanding here lets the option be written
+# the way a path is normally written, and lets one config give each host its own
+# save directory.
+transform_expand_path() {
+  local path="${1}" home="${2}" host="${3:-}" tilde='~'
+  case "${path}" in
+    "${tilde}") path="${home}" ;;
+    "${tilde}/"*) path="${home}/${path#"${tilde}/"}" ;;
+  esac
+  path="${path//\$HOME/${home}}"
+  path="${path//\$HOSTNAME/${host}}"
+  printf '%s' "${path}"
+}
+
 # transform_rewrite_path PATH OLD NEW -> PATH with a leading OLD replaced by NEW,
 # only at a path boundary so "/home/old" never rewrites "/home/older". When OLD is
 # empty, OLD equals NEW, or PATH does not start with OLD, PATH is returned as is.
@@ -66,5 +83,6 @@ transform_keep_session() {
 
 export -f transform_default_sensitive
 export -f transform_rewrite_path
+export -f transform_expand_path
 export -f transform_is_sensitive
 export -f transform_keep_session

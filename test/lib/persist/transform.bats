@@ -71,3 +71,18 @@ teardown() {
   run transform_keep_session "other" "work"
   [ "${status}" -eq 1 ]
 }
+
+@test "transform - expand_path resolves a leading tilde" {
+  [[ "$(transform_expand_path "~/state" /home/me box)" == "/home/me/state" ]]
+  [[ "$(transform_expand_path "~" /home/me box)" == "/home/me" ]]
+}
+
+@test "transform - expand_path resolves HOME and HOSTNAME placeholders" {
+  [[ "$(transform_expand_path '$HOME/state' /home/me box)" == "/home/me/state" ]]
+  [[ "$(transform_expand_path '/state/$HOSTNAME' /home/me box)" == "/state/box" ]]
+}
+
+@test "transform - expand_path leaves a plain path alone" {
+  [[ "$(transform_expand_path /state/persist /home/me box)" == "/state/persist" ]]
+  [[ "$(transform_expand_path "/state/~notahome" /home/me box)" == "/state/~notahome" ]]
+}

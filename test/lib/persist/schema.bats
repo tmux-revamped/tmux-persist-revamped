@@ -57,3 +57,33 @@ teardown() {
   run schema_stale 1 100000 0
   [ "${status}" -eq 1 ]
 }
+
+@test "schema - replacement allowed when the new dump has windows" {
+  local new old
+  new=$(printf 'window\ta\nheader\t1\n')
+  old=$(printf 'window\tb\nwindow\tc\nheader\t1\n')
+
+  run schema_replacement_allowed "${new}" "${old}"
+
+  [ "${status}" -eq 0 ]
+}
+
+@test "schema - replacement refused when an empty dump would replace a populated save" {
+  local new old
+  new=$(printf 'header\t1\n')
+  old=$(printf 'window\tb\nheader\t1\n')
+
+  run schema_replacement_allowed "${new}" "${old}"
+
+  [ "${status}" -ne 0 ]
+}
+
+@test "schema - replacement allowed when both are empty" {
+  local new old
+  new=$(printf 'header\t1\n')
+  old=""
+
+  run schema_replacement_allowed "${new}" "${old}"
+
+  [ "${status}" -eq 0 ]
+}
