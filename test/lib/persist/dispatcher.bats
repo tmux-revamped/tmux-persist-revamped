@@ -335,6 +335,34 @@ teardown() {
   _has_session "no_such_session_xyz" >/dev/null 2>&1 || true
   _mktemp "${BATS_TEST_TMPDIR}" >/dev/null 2>&1 || true
   _pane_current_command "no_such_session_xyz:0" >/dev/null 2>&1 || true
+  _socket_path >/dev/null 2>&1 || true
+  _hostname >/dev/null 2>&1 || true
+  _uname >/dev/null 2>&1 || true
+  _tmux_bin >/dev/null 2>&1 || true
+  _save_body "${BATS_TEST_TMPDIR}/absent" >/dev/null 2>&1 || true
+}
+
+@test "dispatcher - the agent seams are callable and never fail the caller" {
+  unset PERSIST_DRY_RUN
+  local agent="${BATS_TEST_TMPDIR}/agent/unit.service"
+
+  run _write_file "${agent}" "content"
+
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${agent}")" == "content" ]]
+  _agent_load Linux "${agent}" unit >/dev/null 2>&1
+  _agent_load Darwin "${agent}" unit >/dev/null 2>&1
+  _agent_unload Linux "${agent}" unit >/dev/null 2>&1
+  _agent_unload Darwin "${agent}" unit >/dev/null 2>&1
+}
+
+@test "dispatcher - write_file fails when the directory cannot be created" {
+  local blocker="${BATS_TEST_TMPDIR}/blocker"
+  : >"${blocker}"
+
+  run _write_file "${blocker}/nested/file" "content"
+
+  [ "${status}" -ne 0 ]
 }
 
 @test "dispatcher - save cleans up and fails when the dump fails" {

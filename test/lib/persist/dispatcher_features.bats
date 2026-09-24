@@ -623,3 +623,88 @@ teardown() {
 
   [[ "${output}" == "tmux-persist-revamped" ]]
 }
+
+@test "features - boot install on macOS writes a launch agent plist" {
+  _uname() { printf 'Darwin'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_install
+
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/Library/LaunchAgents/tmux-persist-revamped.plist")" == *"<key>RunAtLoad</key>"* ]]
+}
+
+@test "features - boot install honours a custom label and command" {
+  tmux set-option -gq "@persist_revamped_boot_label" "my-tmux"
+  tmux set-option -gq "@persist_revamped_boot_command" "new-session -d -s work"
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_install
+
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/.config/systemd/user/my-tmux.service")" == *"new-session -d -s work"* ]]
+}
+
+@test "features - boot install fails when the agent cannot be written" {
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  local blocker="${BATS_TEST_TMPDIR}/blocked"
+  : >"${blocker}"
+  HOME="${blocker}"
+
+  run persist_boot_install
+
+  [ "${status}" -ne 0 ]
+}
+
+@test "features - boot uninstall is a no-op when no agent is installed" {
+  _uname() { printf 'Linux'; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_boot_uninstall
+
+  [ "${status}" -eq 0 ]
+  [[ -z "${output}" ]]
+}
+
+@test "features - boot sync installs when on and removes when off" {
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  _agent_unload() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+  local agent="${BATS_TEST_TMPDIR}/.config/systemd/user/tmux-persist-revamped.service"
+  tmux set-option -gq "@persist_revamped_boot" "on"
+
+  persist_boot_sync
+
+  [ -f "${agent}" ]
+
+  tmux set-option -gq "@persist_revamped_boot" "off"
+
+  persist_boot_sync
+
+  [ ! -e "${agent}" ]
+}
+
+@test "features - the dispatcher routes the boot agent commands" {
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_load() { :; }
+  _agent_unload() { :; }
+  HOME="${BATS_TEST_TMPDIR}"
+
+  run persist_main boot-install
+  [ "${status}" -eq 0 ]
+
+  run persist_main boot-sync
+  [ "${status}" -eq 0 ]
+
+  run persist_main boot-uninstall
+  [ "${status}" -eq 0 ]
+}
