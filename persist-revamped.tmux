@@ -28,6 +28,11 @@ if [[ -n "${pick_key}" ]]; then
   tmux bind-key "${pick_key}" display-popup -E "bash '${DISPATCH}' pick"
 fi
 
+# Install or remove the login agent to match @persist_revamped_boot. Restoring on
+# server start only helps once a server exists, and on a freshly booted machine
+# nothing has started one until a terminal is opened.
+tmux run-shell -b "bash '${DISPATCH}' boot-sync"
+
 # Restore on start, then stamp the boot time so the grace window can suppress the
 # first auto-saves and avoid clobbering what was just restored.
 tmux run-shell -b "bash '${DISPATCH}' boot"

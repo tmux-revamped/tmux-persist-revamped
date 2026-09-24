@@ -25,6 +25,27 @@ line stays yours and saving does not depend on how often the bar refreshes. Afte
 restore on server start, a short grace window holds auto-save off so it cannot
 overwrite what was just brought back.
 
+Every save is its own file under `history/`, and the slot's path is a symlink to
+the newest one. Rolling back to a working environment is repointing that link, and
+a save that repeats the previous one is dropped rather than stored again, so an
+idle machine does not fill the history with copies of one environment. A save file
+written before the history existed is moved into it on the first save rather than
+replaced.
+
+Starting a tmux server at login closes the gap this plugin cannot reach on its
+own: restore-on-start needs a server, and a freshly booted machine has none until
+a terminal is opened. With `@persist_revamped_boot` on, a launchd agent on macOS
+or a systemd user unit on Linux starts one, and the environment is already back
+when the first terminal attaches. Neither is restarted if it exits, because a user
+who kills their tmux server means it.
+
+When a restore brings back something broken, the halt file stops the next one
+without editing any config. Create it, start a clean server, delete it when done.
+It defaults into the save directory so it survives a reboot, which is what the
+"do not restore at next boot" case needs; pointing it at `/tmp` instead gives the
+opposite and equally useful meaning, since Linux clears `/tmp` at boot and the
+halt then lasts only for the current session.
+
 Saves are scoped to the server that wrote them. tmux names its socket `default`
 unless `-L` or `-S` says otherwise, and every other name identifies a different
 environment, so those servers save under `servers/<socket>/` instead of over the
@@ -67,6 +88,9 @@ Run any of these as `bash <plugin>/src/persist.sh <command>`, or bind them to ke
 | `verify [slot]` | check a save's integrity, schema version, and staleness |
 | `doctor` | report what the plugin found on this host |
 | `event` | a debounced save for a tmux close hook |
+| `boot-install` | write and load the login agent for this host |
+| `boot-uninstall` | unload and remove it |
+| `boot-sync` | install or remove it to match `@persist_revamped_boot` |
 
 ## Configuration
 
@@ -81,12 +105,16 @@ Run any of these as `bash <plugin>/src/persist.sh <command>`, or bind them to ke
 | `@persist_revamped_capture_panes` | `off` | set to `on` to save each pane's visible text and repaint it on restore; trailing blank lines are trimmed so the real output stays on screen |
 | `@persist_revamped_capture_args` | `off` | set to `on` to save the full command line of each restorable program and replay it with its arguments, for example `vim src/app.ts` instead of bare `vim`; falls back to the bare command when the arguments cannot be resolved |
 | `@persist_revamped_restore_on_start` | `off` | restore automatically when the server starts |
+| `@persist_revamped_halt_file` | `<save dir>/no-restore` | while this file exists, restore-on-start is skipped |
+| `@persist_revamped_boot` | `off` | install a login agent that starts a tmux server at login |
+| `@persist_revamped_boot_command` | `new-session -d` | what the login agent runs |
+| `@persist_revamped_boot_label` | `tmux-persist-revamped` | the launchd label or systemd unit name |
 | `@persist_revamped_boot_grace` | `60` | seconds after a boot restore during which auto-save stays off |
 | `@persist_revamped_pick_key` | empty | key for the fzf slot-picker popup; unbound until set |
 | `@persist_revamped_redact` | empty | extra commands whose scrollback is never captured, appended to the built-in `ssh`, `sudo`, and similar |
 | `@persist_revamped_vim_sessions` | `off` | when `on`, reopen an editor with `-S` if a `Session.vim` sits in the pane's directory |
 | `@persist_revamped_rewrite_home` | `off` | when `on`, rewrite a saved home prefix to the current home on restore, for moving a save between machines |
-| `@persist_revamped_backups` | `0` | number of timestamped backups to keep per save; `0` keeps none |
+| `@persist_revamped_backups` | `5` | how many saves the history keeps per slot, the current one included; the floor is one |
 | `@persist_revamped_event_debounce` | `0` | seconds; when above `0`, genuine close events trigger a debounced save |
 | `@persist_revamped_stale_secs` | `0` | `verify` flags a save older than this many seconds; `0` disables the staleness check |
 | `@persist_revamped_pre_save_hook` | empty | shell command run before each save |
