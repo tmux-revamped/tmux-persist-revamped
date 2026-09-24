@@ -21,11 +21,11 @@ _write_file() {
 _agent_load() {
   local os="${1}" path="${2}" label="${3}"
   if [[ "${os}" == "Darwin" ]]; then
-    launchctl unload "${path}" >/dev/null 2>&1
-    launchctl load "${path}" >/dev/null 2>&1
+    launchctl unload "${path}" >/dev/null 2>&1 || true
+    launchctl load "${path}" >/dev/null 2>&1 || true
   else
-    systemctl --user daemon-reload >/dev/null 2>&1
-    systemctl --user enable "${label}" >/dev/null 2>&1
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+    systemctl --user enable "${label}" >/dev/null 2>&1 || true
   fi
   return 0
 }
@@ -33,10 +33,10 @@ _agent_load() {
 _agent_unload() {
   local os="${1}" path="${2}" label="${3}"
   if [[ "${os}" == "Darwin" ]]; then
-    launchctl unload "${path}" >/dev/null 2>&1
+    launchctl unload "${path}" >/dev/null 2>&1 || true
   else
-    systemctl --user disable "${label}" >/dev/null 2>&1
-    systemctl --user daemon-reload >/dev/null 2>&1
+    systemctl --user disable "${label}" >/dev/null 2>&1 || true
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
   fi
   return 0
 }
