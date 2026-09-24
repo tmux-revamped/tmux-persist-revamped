@@ -58,6 +58,16 @@ transform_rewrite_path() {
   return 0
 }
 
+# transform_shell_quote VALUE -> VALUE wrapped in single quotes, with any single
+# quote inside it closed, escaped, and reopened. A restored directory is typed into
+# a live shell, so a path holding a space, a quote, or a glob character reaches the
+# shell as one word instead of several. The form is understood by every shell the
+# strategy allows, including fish and csh, which do not accept a "--" separator.
+transform_shell_quote() {
+  local value="${1}"
+  printf "'%s'" "${value//\'/\'\\\'\'}"
+}
+
 # transform_is_sensitive CMD LIST -> success when CMD matches a glob in LIST, so its
 # scrollback must not be captured. An empty CMD never matches.
 transform_is_sensitive() {
@@ -84,5 +94,6 @@ transform_keep_session() {
 export -f transform_default_sensitive
 export -f transform_rewrite_path
 export -f transform_expand_path
+export -f transform_shell_quote
 export -f transform_is_sensitive
 export -f transform_keep_session

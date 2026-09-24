@@ -86,3 +86,19 @@ teardown() {
   [[ "$(transform_expand_path /state/persist /home/me box)" == "/state/persist" ]]
   [[ "$(transform_expand_path "/state/~notahome" /home/me box)" == "/state/~notahome" ]]
 }
+
+@test "transform - shell_quote wraps a plain path in single quotes" {
+  [[ "$(transform_shell_quote /home/me/work)" == "'/home/me/work'" ]]
+}
+
+@test "transform - shell_quote keeps a path with spaces as one word" {
+  [[ "$(transform_shell_quote "/home/me/@ Pessoal/fdstoolkit")" == "'/home/me/@ Pessoal/fdstoolkit'" ]]
+}
+
+@test "transform - shell_quote escapes an embedded single quote" {
+  [[ "$(transform_shell_quote "/home/me/it's here")" == "'/home/me/it'\\''s here'" ]]
+}
+
+@test "transform - shell_quote neutralises glob and expansion characters" {
+  [[ "$(transform_shell_quote '/home/me/$HOME *?[a] `x`')" == "'/home/me/\$HOME *?[a] \`x\`'" ]]
+}

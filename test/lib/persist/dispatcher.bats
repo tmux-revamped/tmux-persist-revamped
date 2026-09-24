@@ -85,12 +85,26 @@ teardown() {
   run cat "${BATS_TEST_TMPDIR}/r.txt"
   [[ "${output}" == *"new-session -d -s main -n editor"* ]]
   [[ "${output}" == *"split-window -t main:0"* ]]
-  [[ "${output}" == *"send-keys -t main:0 cd /home/u Enter"* ]]
+  [[ "${output}" == *"send-keys -t main:0 cd '/home/u' Enter"* ]]
   [[ "${output}" == *vim* ]]
   [[ "${output}" == *htop* ]]
   [[ "${output}" == *"select-layout -t main:0 lay0"* ]]
   [[ "${output}" == *"select-window -t main:0"* ]]
   [[ "${output}" == *"select-pane -t main:0.0"* ]]
+}
+
+@test "dispatcher - restore sends a path with spaces as a single word" {
+  mkdir -p "${SAVE}"
+  {
+    persist_join window main 0 editor 1 lay0
+    persist_join pane main 0 0 1 "/home/u/@ Pessoal/fdstoolkit" bash
+  } >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+
+  persist_restore >"${BATS_TEST_TMPDIR}/r.txt"
+
+  run cat "${BATS_TEST_TMPDIR}/r.txt"
+  [[ "${output}" == *"send-keys -t main:0 cd '/home/u/@ Pessoal/fdstoolkit' Enter"* ]]
 }
 
 @test "dispatcher - dump captures stripped pane content when enabled" {
@@ -199,7 +213,7 @@ teardown() {
   _has_session() { return 1; }
   PERSIST_FAKE_PANE_CMD="bash" persist_restore >"${BATS_TEST_TMPDIR}/keep.txt"
   run cat "${BATS_TEST_TMPDIR}/keep.txt"
-  [[ "${output}" == *"send-keys -t main:0 cd /home/u Enter"* ]]
+  [[ "${output}" == *"send-keys -t main:0 cd '/home/u' Enter"* ]]
   [[ "${output}" == *"send-keys -t main:0 vim src/app.ts Enter"* ]]
 }
 
