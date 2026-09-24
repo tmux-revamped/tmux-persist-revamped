@@ -10,7 +10,8 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   resolve-ubuntu-lts:
@@ -44,6 +45,8 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Run tests
         run: make test
@@ -56,6 +59,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install dependencies
         run: brew install bats-core tmux
@@ -67,6 +72,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install tmux, bats, and GNU tools
         run: brew install bats-core tmux coreutils gawk gnu-sed grep
@@ -86,6 +93,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install shellcheck
         run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
@@ -94,7 +103,7 @@ jobs:
         run: make lint
 
       - name: Validate workflow syntax
-        uses: docker://rhysd/actionlint:latest
+        uses: docker://rhysd/actionlint:1.7.9@sha256:a0383f60d92601e2694e24b24d37df7b6a40bed7cedbc447611c50009bf02d94
         with:
           args: -color
 
@@ -147,6 +156,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install test dependencies
         run: |
@@ -169,6 +180,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Check version consistency
         run: |
@@ -194,7 +207,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Determine version
         id: version
@@ -210,16 +223,19 @@ jobs:
 
       - name: Extract changelog
         if: steps.version.outputs.skip == 'false'
+        env:
+          VER: ${{ steps.version.outputs.current_ver }}
         run: |
-          ver="${{ steps.version.outputs.current_ver }}"
+          ver="${VER}"
           awk "/^## \[${ver}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > /tmp/release-notes.md
 
       - name: Create release
         if: steps.version.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VER: ${{ steps.version.outputs.current_ver }}
         run: |
-          ver="${{ steps.version.outputs.current_ver }}"
+          ver="${VER}"
           repo="${GITHUB_REPOSITORY##*/}"
           mkdir -p /tmp/release-staging
           cp -r src README.md CHANGELOG.md LICENSE /tmp/release-staging/
