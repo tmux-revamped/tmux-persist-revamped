@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   resolve-ubuntu-lts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
       version: ${{ steps.lts.outputs.version }}
@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        host: [ubuntu-latest, ubuntu-24.04-arm]
+        host: [ubuntu-26.04, ubuntu-26.04-arm]
     runs-on: ${{ matrix.host }}
     container:
       image: ubuntu:${{ needs.resolve-ubuntu-lts.outputs.version }}
@@ -90,7 +90,7 @@ jobs:
           make test
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -153,7 +153,7 @@ jobs:
           done < <(grep -rhoE "@${slug}_revamped_[a-z_]+" src/ | sort -u)
 
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -177,7 +177,7 @@ jobs:
         run: make coverage
 
   version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -200,7 +200,7 @@ jobs:
   release:
     needs: [test-linux, test-macos, test-macos-gnu, lint, coverage, version]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:

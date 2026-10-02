@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   label:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       pull-requests: write
@@ -22,7 +22,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   size:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       pull-requests: write
@@ -55,7 +55,7 @@ jobs:
           gh pr edit "$PR_NUMBER" --add-label "$label" || true
 
   commit-grammar:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Validate the pull request title
         env:
