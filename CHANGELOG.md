@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A restore rebuilds every window at its saved index. It used to append each
+  window after the ones a session already held while still sending panes,
+  layouts, and selection to the saved index, so a restore on start after the boot
+  command had created its session shifted every window's contents one place and
+  kept the boot command's empty window, which the next save then persisted. On
+  server start the boot command's lone default-shell window is now replaced or
+  dropped, and a saved index that a live window already holds is remapped to the
+  index the window was given.
 - A save no longer replaces a populated save file with an empty one. A dump is
   empty whenever the server holds no session, which happens while a server starts
   and while it closes its last session, so a close-event save could wipe the
