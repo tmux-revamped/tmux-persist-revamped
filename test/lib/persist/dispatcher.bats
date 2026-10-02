@@ -217,13 +217,13 @@ teardown() {
   [[ "${output}" == *"send-keys -t main:0 vim src/app.ts Enter"* ]]
 }
 
-@test "dispatcher - restore adds a window when the session already exists" {
+@test "dispatcher - restore adds a window at its saved index when the session already exists" {
   mkdir -p "${SAVE}"
   persist_join window main 1 logs 0 lay0 >"${SAVE}/last.txt"
   _has_session() { return 0; }
   persist_restore >"${BATS_TEST_TMPDIR}/r2.txt"
   run cat "${BATS_TEST_TMPDIR}/r2.txt"
-  [[ "${output}" == *"new-window -t main: -n logs"* ]]
+  [[ "${output}" == *"new-window -t main:1 -n logs"* ]]
 }
 
 @test "dispatcher - restore returns non-zero with no save file" {

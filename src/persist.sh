@@ -477,7 +477,7 @@ persist_boot() {
   # start a second one.
   [[ "$(get_tmux_option "${PERSIST_OPT_BOOTED}" "0")" == "1" ]] && return 0
   set_tmux_option "${PERSIST_OPT_BOOTED}" "1"
-  persist_restore || true
+  persist_restore "" "" "$(persist_boot_placeholders)" || true
   set_tmux_option "${PERSIST_OPT_BOOT_TS}" "$(_now)"
 }
 
