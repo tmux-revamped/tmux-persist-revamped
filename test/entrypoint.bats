@@ -16,6 +16,12 @@ teardown() {
   rm -f "${SOCKET}" 2>/dev/null || true
 }
 
+process_running() {
+  local state
+  state="$(ps -o stat= -p "${1}" 2>/dev/null)"
+  [[ -n "${state}" && "${state}" != Z* ]]
+}
+
 run_entry() {
   local quoted
   printf -v quoted '%q' "${ENTRY}"
@@ -94,8 +100,8 @@ run_entry() {
 
   [[ -S "${SOCKET}" ]]
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    kill -0 "${worker}" 2>/dev/null || break
+    process_running "${worker}" || break
     sleep 0.5
   done
-  ! kill -0 "${worker}" 2>/dev/null
+  ! process_running "${worker}"
 }
