@@ -70,9 +70,9 @@ socket="$(tmux display-message -p '#{socket_path}' 2>/dev/null)"
 # background child that keeps them open holds the pipe open too, so tmux's
 # run-shell waits on the worker instead of on the entry point and the config
 # reload stalls for as long as the server lives.
+worker_sleep="${PERSIST_WORKER_SLEEP:-60}"
 (
-  while [[ -S "${socket}" ]]; do
-    sleep 60
+  while sleep "${worker_sleep}" && tmux -S "${socket}" list-sessions >/dev/null 2>&1; do
     bash "${DISPATCH}" auto >/dev/null 2>&1
   done
 ) </dev/null >/dev/null 2>&1 &

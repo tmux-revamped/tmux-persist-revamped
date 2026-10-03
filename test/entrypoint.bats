@@ -79,3 +79,23 @@ run_entry() {
   [[ "${output}" == *"persist.sh' save"* ]]
   [[ "${output}" == *"persist.sh' restore"* ]]
 }
+
+@test "entry point - the worker exits when its server dies and leaves the socket file" {
+  run bash -c '
+    tmux() { command tmux -S "'"${SOCKET}"'" "$@"; }
+    export -f tmux
+    PERSIST_WORKER_SLEEP=1 bash "'"${ENTRY}"'" >/dev/null 2>&1
+  '
+  local worker server attempt
+  worker="$(command tmux -S "${SOCKET}" show-option -gqv '@persist_revamped_worker_pid')"
+  server="$(command tmux -S "${SOCKET}" display-message -p '#{pid}')"
+
+  kill -9 "${server}"
+
+  [[ -S "${SOCKET}" ]]
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "${worker}" 2>/dev/null || break
+    sleep 0.5
+  done
+  ! kill -0 "${worker}" 2>/dev/null
+}

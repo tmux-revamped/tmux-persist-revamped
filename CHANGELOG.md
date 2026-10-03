@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The auto-save worker ran until its socket file disappeared, and a server
+  killed without cleanup leaves that file behind, so one worker per such server
+  ran forever; seven had piled up on one machine. The worker now exits once the
+  server stops answering.
 - A restore rebuilds every window at its saved index. It used to append each
   window after the ones a session already held while still sending panes,
   layouts, and selection to the saved index, so a restore on start after the boot
