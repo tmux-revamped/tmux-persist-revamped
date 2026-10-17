@@ -131,6 +131,17 @@ The built-in replay list covers common editors, pagers, and CLIs: `vim`, `nvim`,
 `emacs`, `less`, `man`, `top`, `htop`, `ssh`, `claude`, `codex`, and more. Anything
 not on the list is left as a plain shell.
 
+### Internal state
+
+The plugin manages these options itself. Do not set them.
+
+| Option | Holds |
+|--------|-------|
+| `@persist_revamped_booted` | `1` once restore-on-start has run, or was skipped by the halt file, for this server, so a config reload does not restore again |
+| `@persist_revamped_boot_ts` | epoch seconds when restore-on-start finished, the start of the boot grace window |
+| `@persist_revamped_last_ts` | epoch seconds of the last successful auto-save, which the interval is measured from |
+| `@persist_revamped_event_ts` | epoch seconds of the last event-triggered save, which the debounce is measured from |
+
 ## Examples
 
 ```tmux
