@@ -9,8 +9,6 @@ setup() {
   unset _PERSIST_REVAMPED_SLOTS_LOADED _PERSIST_REVAMPED_SCHEMA_LOADED
   unset _PERSIST_REVAMPED_TRANSFORM_LOADED _PERSIST_REVAMPED_BACKUP_LOADED
   unset _PERSIST_REVAMPED_EVENT_LOADED _PERSIST_REVAMPED_VIMSESSION_LOADED
-  # Point any real tmux call at an empty socket dir so the live-seam test can
-  # never read or mutate the developer's running tmux server.
   export TMUX_TMPDIR="${BATS_TEST_TMPDIR}/tmuxsock"
   export HOME="${BATS_TEST_TMPDIR}/home"
   export XDG_STATE_HOME="${BATS_TEST_TMPDIR}/xdgstate"

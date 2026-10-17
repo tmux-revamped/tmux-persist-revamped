@@ -25,8 +25,6 @@ teardown() {
   cleanup_test_environment
 }
 
-# --- sensitive list and capture redaction ----------------------------------
-
 @test "features - sensitive list defaults without extras" {
   local l
   l="$(persist_sensitive_list)"
@@ -88,8 +86,6 @@ teardown() {
   [[ "$(head -n 1 "${BATS_TEST_TMPDIR}/wn.txt")" == "$(persist_join window main 1 "" 1 lay1 0)" ]]
 }
 
-# --- schema header and zoom capture ----------------------------------------
-
 @test "features - dump appends a schema header record" {
   _list_windows() { printf 'main\0370\037e\0371\037lay\0370\n'; }
   _list_panes() { printf 'main\0370\0370\0371\037/h\037bash\0371\n'; }
@@ -108,8 +104,6 @@ teardown() {
   [[ "${lines[0]}" == window* ]]
   [[ "${lines[0]}" == *"lay"$'	'"1"* ]]
 }
-
-# --- named slots: save, restore, list --------------------------------------
 
 @test "features - save writes a named slot file" {
   _list_windows() { printf 'main\0370\037e\0371\037lay\0370\n'; }
@@ -136,8 +130,6 @@ teardown() {
   [[ "${output}" == *work* ]]
   [[ "${output}" == *play* ]]
 }
-
-# --- save hooks and rolling backups ----------------------------------------
 
 @test "features - save runs the pre and post save hooks" {
   tmux set-option -gq "@persist_revamped_pre_save_hook" "echo PRE"
@@ -231,8 +223,6 @@ teardown() {
   [[ "$(cat "${SAVE}/last.txt")" == *new* ]]
 }
 
-# --- restore hooks, zoom, portable rewrite, vim sessions -------------------
-
 @test "features - restore runs the pre and post restore hooks" {
   mkdir -p "${SAVE}"
   persist_join window main 0 e 1 lay0 0 >"${SAVE}/last.txt"
@@ -299,8 +289,6 @@ teardown() {
   [[ "${output}" != *"nvim -S"* ]]
 }
 
-# --- selective merge restore -----------------------------------------------
-
 @test "features - merge restores only the requested session" {
   mkdir -p "${SAVE}"
   {
@@ -327,8 +315,6 @@ teardown() {
   run persist_merge
   [ "${status}" -eq 2 ]
 }
-
-# --- preview, verify, doctor -----------------------------------------------
 
 @test "features - preview summarizes a save" {
   mkdir -p "${SAVE}"
@@ -428,8 +414,6 @@ teardown() {
   [[ "${output}" == "-axo pid=,ppid=,command=" ]]
 }
 
-# --- event-based debounced saves -------------------------------------------
-
 @test "features - event does nothing when debounce is disabled" {
   local saved=0
   persist_save() { saved=1; }
@@ -469,8 +453,6 @@ teardown() {
   persist_event
   [ "${saved}" -eq 0 ]
 }
-
-# --- picker and seams ------------------------------------------------------
 
 @test "features - pick restores the chosen slot" {
   _list_dir() { printf 'work.txt\n'; }
@@ -539,8 +521,6 @@ teardown() {
   run _list_dir "${BATS_TEST_TMPDIR}/d" '*.nomatch'
   [ "${#lines[@]}" -eq 0 ]
 }
-
-# --- dispatch routing ------------------------------------------------------
 
 @test "features - main routes the new subcommands" {
   persist_merge() { echo "MERGE $*"; }
