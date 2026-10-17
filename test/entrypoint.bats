@@ -183,3 +183,16 @@ run_entry() {
   run process_running "${worker}"
   [ "${status}" -ne 0 ]
 }
+
+@test "entry point - the slot picker stays unbound by default" {
+  # Arrange
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_interval' '0'
+
+  # Act
+  run_entry
+
+  # Assert
+  run command tmux -S "${SOCKET}" list-keys -T prefix
+  [[ "${output}" == *"persist.sh' save"* ]] || false
+  [[ "${output}" != *"persist.sh' pick"* ]]
+}
