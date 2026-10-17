@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Two config reloads that overlapped could each start an auto-save worker, and
+  only one pid was recorded, so the other worker ran for the life of the
+  server. A worker now exits once the recorded worker pid no longer names it.
 - Turning on event saves replaced any `session-closed` or `window-unlinked`
   hook the user had set, because the plugin set the whole hook array. It now
   appends its hook once, leaves other hooks alone, and removes only its own

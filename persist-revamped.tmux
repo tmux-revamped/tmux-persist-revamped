@@ -86,7 +86,9 @@ socket="$(tmux display-message -p '#{socket_path}' 2>/dev/null)"
 # reload stalls for as long as the server lives.
 worker_sleep="${PERSIST_WORKER_SLEEP:-60}"
 (
-  while sleep "${worker_sleep}" && tmux -S "${socket}" list-sessions >/dev/null 2>&1; do
+  me="${BASHPID:-$(exec sh -c 'printf "%s" "${PPID}"')}"
+  while sleep "${worker_sleep}" && tmux -S "${socket}" list-sessions >/dev/null 2>&1 &&
+    [[ "$(tmux -S "${socket}" show-option -gqv '@persist_revamped_worker_pid' 2>/dev/null)" == "${me}" ]]; do
     bash "${DISPATCH}" auto >/dev/null 2>&1
   done
 ) </dev/null >/dev/null 2>&1 &

@@ -161,3 +161,25 @@ run_entry() {
   [[ "${output}" == *"@user_hook_ran"* ]] || false
   [[ "${output}" != *"persist.sh"* ]]
 }
+
+@test "entry point - a worker the pid option no longer names exits" {
+  # Arrange
+  run bash -c '
+    tmux() { command tmux -S "'"${SOCKET}"'" "$@"; }
+    export -f tmux
+    PERSIST_WORKER_SLEEP=1 bash "'"${ENTRY}"'" >/dev/null 2>&1
+  '
+  local worker
+  worker="$(command tmux -S "${SOCKET}" show-option -gqv '@persist_revamped_worker_pid')"
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_worker_pid' '999999'
+
+  # Act
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    process_running "${worker}" || break
+    sleep 0.5
+  done
+
+  # Assert
+  run process_running "${worker}"
+  [ "${status}" -ne 0 ]
+}
