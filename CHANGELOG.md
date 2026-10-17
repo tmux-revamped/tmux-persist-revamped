@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A restore or merge of session `work` treated an existing `work2` as that
+  session, because tmux matches a session target by prefix when no exact name
+  exists, so the saved windows landed in the wrong session or the merge was
+  skipped. Session checks now match the name exactly.
 - With `@persist_revamped_boot` on, every config reload unloaded and reloaded
   the login agent, and because the agent runs at load that ran the boot
   command again each time. The agent is now written and reloaded only when its

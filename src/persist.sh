@@ -130,7 +130,7 @@ _list_panes() {
 }
 
 _has_session() {
-  command tmux has-session -t "${1}" 2>/dev/null
+  command tmux has-session -t "=${1}" 2>/dev/null
 }
 
 _mktemp() {
