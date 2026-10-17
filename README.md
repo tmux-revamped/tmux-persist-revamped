@@ -46,10 +46,12 @@ It defaults into the save directory so it survives a reboot, which is what the
 opposite and equally useful meaning, since Linux clears `/tmp` at boot and the
 halt then lasts only for the current session.
 
-Saves are scoped to the server that wrote them. tmux names its socket `default`
-unless `-L` or `-S` says otherwise, and every other name identifies a different
-environment, so those servers save under `servers/<socket>/` instead of over the
-default server's file. This matters more than it sounds: any tmux server on the
+Saves are scoped to the server that wrote them. Only the real default socket,
+`${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`, saves at the top of the save directory.
+A server started with `-L name` saves under `servers/name/`, and one started with
+`-S path` saves under a directory named from that full path, so a socket that
+merely happens to be called `default` elsewhere never writes over the default
+server's file. This matters more than it sounds: any tmux server on the
 machine reads the same `~/.tmux.conf`, including the throwaway ones a test suite
 starts, and without scoping the last one to tick wins.
 

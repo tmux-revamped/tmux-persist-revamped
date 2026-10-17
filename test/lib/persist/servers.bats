@@ -40,13 +40,24 @@ teardown() {
   [ "${status}" -eq 1 ]
 }
 
-@test "servers - socket label is the socket base name" {
-  [[ "$(servers_socket_label /private/tmp/tmux-501/default)" == "default" ]]
-  [[ "$(servers_socket_label /tmp/tiling-test-4-2)" == "tiling-test-4-2" ]]
+@test "servers - socket label is default only for the real default socket" {
+  [[ "$(servers_socket_label /private/tmp/tmux-501/default /private/tmp/tmux-501/default)" == "default" ]] || false
+  [[ "$(servers_socket_label /private/tmp/tmux-501/work /private/tmp/tmux-501/default)" == "work" ]]
 }
 
 @test "servers - socket label collapses characters that could escape the directory" {
-  [[ "$(servers_socket_label "/tmp/a b/../weird name")" == "weird_name" ]]
+  [[ "$(servers_socket_label "/tmp/a b/../weird name" /tmp/tmux-1/default)" == "_tmp_a_b_.._weird_name" ]]
+}
+
+@test "servers - a socket named default outside the socket directory is not the default server" {
+  # Arrange
+  local default_path="/tmp/tmux-1000/default"
+
+  # Act
+  run servers_socket_label "/home/u/sockets/default" "${default_path}"
+
+  # Assert
+  [[ "${output}" == "_home_u_sockets_default" ]]
 }
 
 @test "servers - socket label falls back to default for an empty path" {

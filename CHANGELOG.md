@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Any server whose socket file was named `default`, such as one started with
+  `-S /some/dir/default`, saved over the default server's file. Only the real
+  default socket under `${TMUX_TMPDIR:-/tmp}/tmux-<uid>/` saves at the top
+  level now. A server started with `-S` elsewhere saves under a directory
+  named from its full socket path, so its existing saves stay in the old
+  `servers/<name>/` directory until moved.
 - A restore or merge of session `work` treated an existing `work2` as that
   session, because tmux matches a session target by prefix when no exact name
   exists, so the saved windows landed in the wrong session or the merge was
