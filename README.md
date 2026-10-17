@@ -1,197 +1,183 @@
 <div align="center">
 
-<h1>tmux-persist-revamped</h1>
+# tmux-persist-revamped
 
-<strong>Save, auto-save, and restore your whole tmux environment, one plugin, no status-line tricks.</strong>
+<strong>Save every tmux session, window and pane, auto-save on a timer, and restore it all after a reboot.</strong>
+
+English &nbsp;|&nbsp; [日本語](README.ja.md) &nbsp;|&nbsp; [简体中文](README.zh-Hans.md) &nbsp;|&nbsp; [繁體中文（香港）](README.zh-HK.md)
+
+[![Tests](https://github.com/tmux-revamped/tmux-persist-revamped/actions/workflows/tests.yml/badge.svg)](https://github.com/tmux-revamped/tmux-persist-revamped/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
+
+<p align="center">
+  <a href="#what-it-does">What it does</a> &nbsp;|&nbsp;
+  <a href="#installation">Installation</a> &nbsp;|&nbsp;
+  <a href="#usage">Usage</a> &nbsp;|&nbsp;
+  <a href="#configuration">Configuration</a> &nbsp;|&nbsp;
+  <a href="#key-bindings">Key bindings</a> &nbsp;|&nbsp;
+  <a href="#how-it-works">How it works</a>
+</p>
 
 </div>
 
-One plugin that captures every session, window, pane, layout, and working
-directory, optionally replays the program each pane was running, and brings it all
-back after a reboot. It is a single rewrite of the save/restore engine and the
-auto-save automation that usually ship as two separate plugins.
+**Auto-saves every 15 minutes. Keeps the last 5 saves of each slot. Replays 20 programs without configuration. Tested on macOS and Linux.**
 
-## How it works
+---
 
-A save walks the live server through tmux format strings and writes each window
-and pane as one escaped record to a temporary file. Only a complete dump is moved
-into `history/` under a new timestamped name, so an interrupted save never leaves a
-half-written file and never touches an earlier save. The slot's symlink is then
-repointed with `ln -sfn`, which removes and recreates the link, so a restore that
-runs in that instant finds no save rather than a partial one. Restore reads
-that file back, recreates the session tree, returns each pane to its directory, and
-replays an allow-listed program.
+## What it does
 
-Auto-save runs from a small detached worker that ticks on a timer and asks the
-plugin whether a save is due. It never writes into `status-right`, so your status
-line stays yours and saving does not depend on how often the bar refreshes. After a
-restore on server start, a short grace window holds auto-save off so it cannot
-overwrite what was just brought back.
+A save records every session, window and pane on the server: window names, indexes, layouts and zoom state, the active window and pane, each pane's working directory, and the program it runs. A restore rebuilds that tree, sends each shell pane back to its directory, and starts the program again when it is on the replay list.
 
-Every save is its own file under `history/`, and the slot's path is a symlink to
-the newest one. Rolling back to a working environment is repointing that link, and
-a save that repeats the previous one is dropped rather than stored again, so an
-idle machine does not fill the history with copies of one environment. A save file
-written before the history existed is moved into it on the first save rather than
-replaced.
+The same plugin auto-saves on a timer, keeps a history of saves, parks whole environments in named slots, and can install a login agent so a tmux server, and your restored environment, exist before the first terminal opens.
 
-Starting a tmux server at login closes the gap this plugin cannot reach on its
-own: restore-on-start needs a server, and a freshly booted machine has none until
-a terminal is opened. With `@persist_revamped_boot` on, a launchd agent on macOS
-or a systemd user unit on Linux starts one, and the environment is already back
-when the first terminal attaches. Neither is restarted if it exits, because a user
-who kills their tmux server means it.
+## Requirements
 
-When a restore brings back something broken, the halt file stops the next one
-without editing any config. Create it, start a clean server, delete it when done.
-It defaults into the save directory so it survives a reboot, which is what the
-"do not restore at next boot" case needs; pointing it at `/tmp` instead gives the
-opposite and equally useful meaning, since Linux clears `/tmp` at boot and the
-halt then lasts only for the current session.
+| Requirement | Version or note |
+|:------------|:----------------|
+| tmux | 3.2 or later |
+| bash | 3.2 or later, so the stock macOS `/bin/bash` works |
+| Operating system | macOS on Apple Silicon and Intel, Linux on x86_64 and arm64 |
+| Core tools | BSD, GNU or uutils coreutils |
+| `fzf` | Optional, for the slot picker |
+| `launchctl` or `systemctl --user` | Optional, for the login agent on macOS or Linux |
 
-Saves are scoped to the server that wrote them. Only the real default socket,
-`${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`, saves at the top of the save directory.
-A server started with `-L name` saves under `servers/name/`, and one started with
-`-S path` saves under a directory named from that full path, so a socket that
-merely happens to be called `default` elsewhere never writes over the default
-server's file. This matters more than it sounds: any tmux server on the
-machine reads the same `~/.tmux.conf`, including the throwaway ones a test suite
-starts, and without scoping the last one to tick wins.
+## Installation
 
-A save also never replaces a populated file with an empty one. A dump is empty
-whenever the server holds no session, which is true while a server is starting and
-again while it is closing its last session, and writing that over a good save
-destroys the environment the plugin exists to protect. One save runs at a time,
-behind a lock that a killed save cannot hold for more than two minutes.
+With [TPM](https://github.com/tmux-plugins/tpm), add the plugin to `~/.tmux.conf` and press `prefix + I`:
 
-The save file uses an escaped field format read under a fixed locale, so an empty
-pane title, a tab inside a value, or a path with spaces round-trips without
-corrupting the record. Counting other tmux servers reads the socket directory
-rather than scanning process arguments, which keeps it quiet on macOS after sleep.
+```tmux
+set -g @plugin 'tmux-revamped/tmux-persist-revamped'
+```
 
-## Keys
+Without TPM, clone the repository and run the entry point from `~/.tmux.conf`:
 
-| Key | Action |
-|-----|--------|
-| `prefix + C-s` | save now |
-| `prefix + C-r` | restore the last save |
+```sh
+git clone https://github.com/tmux-revamped/tmux-persist-revamped ~/.tmux/plugins/tmux-persist-revamped
+```
 
-Both keys are configurable.
+```tmux
+run-shell ~/.tmux/plugins/tmux-persist-revamped/persist-revamped.tmux
+```
 
-## Commands
+## Usage
 
-Run any of these as `bash <plugin>/src/persist.sh <command>`, or bind them to keys.
+Press `prefix + C-s` to save and `prefix + C-r` to restore the last save. Auto-save is on from the moment the plugin loads.
+
+To restore on server start and save more often:
+
+```tmux
+set -g @persist_revamped_restore_on_start 'on'
+set -g @persist_revamped_interval '5'
+set -g @persist_revamped_processes 'lazygit k9s'
+```
+
+Every action is also a command. Run it as `bash ~/.tmux/plugins/tmux-persist-revamped/src/persist.sh <command>`, or bind it to a key.
 
 | Command | Action |
-|---------|--------|
-| `save [slot]` | save now, into a named slot when given |
-| `restore [slot]` | restore a save, from a named slot when given |
-| `merge <session> [slot]` | restore one session only, and never over a session that already exists |
-| `slots` | list the named slots |
-| `pick` | choose a slot through fzf and restore it |
-| `preview [slot]` | print what a save holds without touching the server |
-| `verify [slot]` | check a save's integrity, schema version, and staleness |
-| `doctor` | report what the plugin found on this host |
-| `event` | a debounced save for a tmux close hook |
-| `boot-install` | write and load the login agent for this host |
-| `boot-uninstall` | unload and remove it |
-| `boot-sync` | install or remove it to match `@persist_revamped_boot` |
+|:--------|:-------|
+| `save [slot]` | Save now, into a named slot when one is given |
+| `restore [slot]` | Restore the last save, or a named slot |
+| `merge <session> [slot]` | Restore one session, only when no session of that name exists |
+| `slots` | List the named slots |
+| `pick` | Choose a named slot with fzf and restore it |
+| `preview [slot]` | Print the save's path, schema, origin home, and window and pane counts |
+| `verify [slot]` | Check the schema header, the record counts and the save's age |
+| `doctor` | Report the save directory, the tools found, the halt file and the login agent |
+| `event` | Save once per debounce period, for the close hooks |
+| `boot-install` | Write and load the login agent |
+| `boot-uninstall` | Unload and remove the login agent |
+| `boot-sync` | Install or remove the login agent to match `@persist_revamped_boot` |
 
 ## Configuration
 
-| Option | Default | Meaning |
-|--------|---------|---------|
-| `@persist_revamped_save_key` | `C-s` | key that triggers a manual save |
-| `@persist_revamped_restore_key` | `C-r` | key that triggers a restore |
-| `@persist_revamped_interval` | `15` | auto-save interval in minutes; `0` turns auto-save off |
-| `@persist_revamped_dir` | `$XDG_STATE_HOME/tmux/persist` | where saves are written; a leading `~`, `$HOME` and `$HOSTNAME` are expanded |
-| `@persist_revamped_scope_socket` | `on` | give every server other than the default socket its own save directory |
-| `@persist_revamped_processes` | empty | extra programs to replay on restore, appended to the built-in list |
-| `@persist_revamped_capture_panes` | `off` | set to `on` to save each pane's visible text and repaint it on restore; trailing blank lines are trimmed so the real output stays on screen |
-| `@persist_revamped_capture_args` | `off` | set to `on` to save the full command line of each restorable program and replay it with its arguments, for example `vim src/app.ts` instead of bare `vim`; falls back to the bare command when the arguments cannot be resolved |
-| `@persist_revamped_restore_on_start` | `off` | restore automatically when the server starts |
-| `@persist_revamped_halt_file` | `<save dir>/no-restore` | while this file exists, restore-on-start is skipped |
-| `@persist_revamped_boot` | `off` | install a login agent that starts a tmux server at login |
-| `@persist_revamped_boot_command` | `new-session -d` | what the login agent runs |
-| `@persist_revamped_boot_label` | `tmux-persist-revamped` | the launchd label or systemd unit name |
-| `@persist_revamped_boot_grace` | `60` | seconds after a boot restore during which auto-save stays off |
-| `@persist_revamped_pick_key` | empty | key for the fzf slot-picker popup; unbound until set |
-| `@persist_revamped_redact` | empty | extra commands whose scrollback is never captured, appended to the built-in `ssh`, `sudo`, and similar |
-| `@persist_revamped_vim_sessions` | `off` | when `on`, reopen an editor with `-S` if a `Session.vim` sits in the pane's directory |
-| `@persist_revamped_rewrite_home` | `off` | when `on`, rewrite a saved home prefix to the current home on restore, for moving a save between machines |
-| `@persist_revamped_backups` | `5` | how many saves the history keeps per slot, the current one included; the floor is one |
-| `@persist_revamped_event_debounce` | `0` | seconds; when above `0`, genuine close events trigger a debounced save. The plugin appends its own `session-closed` and `window-unlinked` hooks beside any you set, and removes only its own when this is `0` |
-| `@persist_revamped_stale_secs` | `0` | `verify` flags a save older than this many seconds; `0` disables the staleness check |
-| `@persist_revamped_pre_save_hook` | empty | shell command run before each save |
-| `@persist_revamped_post_save_hook` | empty | shell command run after a successful save |
-| `@persist_revamped_pre_restore_hook` | empty | shell command run before each restore |
-| `@persist_revamped_post_restore_hook` | empty | shell command run after each restore |
+Set any option in `~/.tmux.conf` before the plugin loads.
 
-The built-in replay list covers common editors, pagers, and CLIs: `vim`, `nvim`,
-`emacs`, `less`, `man`, `top`, `htop`, `ssh`, `claude`, `codex`, and more. Anything
-not on the list is left as a plain shell.
+| Option | Default | Meaning |
+|:-------|:--------|:--------|
+| `@persist_revamped_interval` | `15` | Minutes between auto-saves. `0` turns auto-save off |
+| `@persist_revamped_dir` | `$XDG_STATE_HOME/tmux/persist` | Save directory, `~/.local/state/tmux/persist` when `XDG_STATE_HOME` is unset. A leading `~` is expanded, and so are `$HOME` and `$HOSTNAME` |
+| `@persist_revamped_scope_socket` | `on` | Give every server other than the default socket its own save directory |
+| `@persist_revamped_processes` | empty | Extra programs to replay, added to the built-in list. Each entry is a shell glob |
+| `@persist_revamped_capture_panes` | `off` | `on` saves each pane's visible text and repaints it on restore, with trailing blank lines trimmed |
+| `@persist_revamped_capture_args` | `off` | `on` saves each program's full command line, such as `vim src/app.ts`, and replays it. A line holding a shell metacharacter or a quote replays as the bare program name |
+| `@persist_revamped_redact` | empty | Extra programs whose pane text is never captured, added to `ssh sudo su vault gpg pass op ssh-add openssl` |
+| `@persist_revamped_restore_on_start` | `off` | `on` restores the last save when the server starts |
+| `@persist_revamped_halt_file` | `<save dir>/no-restore` | While this file exists, restore on start is skipped |
+| `@persist_revamped_boot` | `off` | `on` installs a login agent that starts a tmux server at login |
+| `@persist_revamped_boot_command` | `new-session -d` | Arguments the login agent passes to tmux |
+| `@persist_revamped_boot_label` | `tmux-persist-revamped` | The launchd label or systemd unit name |
+| `@persist_revamped_boot_grace` | `60` | Seconds after a restore on start during which no auto-save or event save runs |
+| `@persist_revamped_backups` | `5` | Saves kept in each slot's history, the current one included. The floor is `1` |
+| `@persist_revamped_event_debounce` | `0` | Seconds. Above `0`, closing a session or a window triggers a save at most once per period |
+| `@persist_revamped_stale_secs` | `0` | `verify` warns about a save older than this many seconds. `0` turns the check off |
+| `@persist_revamped_vim_sessions` | `off` | `on` reopens vim, nvim, vi, gvim or mvim with `-S` when a `Session.vim` sits in the pane's directory |
+| `@persist_revamped_rewrite_home` | `off` | `on` rewrites the home directory recorded in the save to the current one on restore, for a save moved between machines |
+| `@persist_revamped_save_key` | `C-s` | Prefix key that saves |
+| `@persist_revamped_restore_key` | `C-r` | Prefix key that restores |
+| `@persist_revamped_pick_key` | empty | Prefix key that opens the slot picker in a popup. Unbound until set |
+| `@persist_revamped_pre_save_hook` | empty | Shell command run before each save |
+| `@persist_revamped_post_save_hook` | empty | Shell command run after each successful save |
+| `@persist_revamped_pre_restore_hook` | empty | Shell command run before each restore |
+| `@persist_revamped_post_restore_hook` | empty | Shell command run after each restore |
+
+The built-in replay list is `vi vim nvim emacs nano man less more tail top htop btop watch ssh mosh irssi weechat mutt claude codex`. A pane running anything else comes back as a shell in the right directory.
 
 ### Internal state
 
 The plugin manages these options itself. Do not set them.
 
 | Option | Holds |
-|--------|-------|
-| `@persist_revamped_booted` | `1` once restore-on-start has run, or was skipped by the halt file, for this server, so a config reload does not restore again |
-| `@persist_revamped_boot_ts` | epoch seconds when restore-on-start finished, the start of the boot grace window |
-| `@persist_revamped_last_ts` | epoch seconds of the last successful auto-save, which the interval is measured from |
-| `@persist_revamped_event_ts` | epoch seconds of the last event-triggered save, which the debounce is measured from |
+|:-------|:------|
+| `@persist_revamped_booted` | `1` once restore on start has run, or was skipped by the halt file, so a config reload does not restore again |
+| `@persist_revamped_boot_ts` | Epoch seconds when restore on start finished, the start of the grace period |
+| `@persist_revamped_last_ts` | Epoch seconds of the last successful auto-save |
+| `@persist_revamped_event_ts` | Epoch seconds of the last event save |
+| `@persist_revamped_worker_pid` | Process id of the auto-save worker, so a reload stops the old one |
 
-## Examples
+## Key bindings
 
-```tmux
-# save every 5 minutes and restore on start
-set -g @persist_revamped_interval '5'
-set -g @persist_revamped_restore_on_start 'on'
+| Key | Action | Option |
+|:----|:-------|:-------|
+| `prefix + C-s` | Save | `@persist_revamped_save_key` |
+| `prefix + C-r` | Restore the last save | `@persist_revamped_restore_key` |
+| unbound | Pick a named slot in a popup | `@persist_revamped_pick_key` |
 
-# also replay these programs
-set -g @persist_revamped_processes 'lazygit k9s weechat'
+`C-s` and `C-r` are the keys the tmux-revamped family allocates to this plugin. They use `C-` so that save and restore work without releasing the modifier.
 
-# keep saves under a project directory instead of XDG state
-set -g @persist_revamped_dir '~/.tmux/persist'
-```
+## How it works
 
-## Install
+**Saving.** A save reads the server with `list-windows -a` and `list-panes -a`, writes one escaped record per window and pane to a temporary file, and moves the finished file into `history/` under a timestamped name. The slot's path, `last.txt` or `slots/<name>.txt`, is a symlink to the newest file. An interrupted save never leaves a partial file behind.
 
-With [TPM](https://github.com/tmux-plugins/tpm), add to `~/.tmux.conf`:
+**History.** A save identical to the previous one is dropped, so an idle machine does not fill the history. Older files beyond `@persist_revamped_backups` are deleted. Rolling back is pointing the symlink at an older file.
 
-```tmux
-set -g @plugin 'tmux-revamped/tmux-persist-revamped'
-```
+**Safety.** A save never replaces a save that holds windows with one that holds none. A server holds no session while it starts and while it closes its last session, and a save taken then would erase the environment. One save runs at a time, behind a lock directory that a killed save cannot hold for more than two minutes.
 
-Press `prefix + I` to install.
+**Restoring.** A restore recreates each session and puts every window back at its saved index. When that index is already taken, the window goes to a free one. Each pane that runs a shell gets a `cd` to its directory, and a program on the replay list is started again. Layouts, the active window, the active pane and zoom are applied last.
 
-## Compatibility
+**Auto-save.** Unless the interval is `0`, loading the plugin starts one background worker per server. It wakes every 60 seconds and saves when the interval has passed. It never writes to `status-right`. It exits when the server stops answering or a newer worker takes over.
 
-Requires tmux 3.2 or later, for `display-popup` and named `show-hooks`, on Linux,
-macOS on Intel and Apple Silicon, and WSL. Shell helpers work the same under BSD
-and GNU userlands.
+**Several servers.** Every tmux server on a machine reads the same `~/.tmux.conf`. Only the default socket, `${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`, saves at the top of the save directory. A server started with `-L name` saves under `servers/name/`, and one started with `-S path` under a directory named from that path.
 
-## Not yet restored
+**Login agent.** With `@persist_revamped_boot` on, the plugin writes a launchd agent to `~/Library/LaunchAgents/` on macOS or a systemd user unit to `~/.config/systemd/user/` on Linux. It starts a tmux server at login, so restore on start runs before any terminal opens. The agent is not restarted when the server exits.
 
-Deferred to a later release, deliberately rather than dropped:
+**Halt file.** When a restore brings back something broken, create the halt file and start a clean server. Restore on start stays off until the file is deleted. Point `@persist_revamped_halt_file` at `/tmp` to make the halt last only until the next boot on Linux, which clears `/tmp` at boot.
 
-- Grouped sessions.
+Session groups are not recreated. A grouped session comes back as a separate session with its own windows.
 
 ## Development
 
-```bash
-make test    # bats suite
-make lint    # shellcheck
-```
+| Command | What it does |
+|:--------|:-------------|
+| `make test` | Runs the bats suite |
+| `make lint` | Runs shellcheck on every shell file |
+| `make coverage` | Measures line coverage with kcov and fails below 95 percent, on Linux |
 
-The save-file codec, the timing logic, the program-restore matcher, and the
-server count are pure functions with fixture tests; every tmux call is a seam the
-suite drives, so the save and restore flow is verified without a live server.
+The suite needs `bats-core` and tmux.
 
 ## License
 
-MIT
+[MIT](LICENSE)
 
 <!-- family:begin -->
 
@@ -214,26 +200,26 @@ memory, and `family/bin/sweep` is how it is discharged.
 | [`tmux-bluetooth-revamped`](https://github.com/tmux-revamped/tmux-bluetooth-revamped) | Every connected Bluetooth device and its battery in your tmux status bar, without blocking the render |
 | [`tmux-cpu-revamped`](https://github.com/tmux-revamped/tmux-cpu-revamped) | CPU load, temperature, and frequency in your tmux status bar, without ever blocking the render |
 | [`tmux-disk-revamped`](https://github.com/tmux-revamped/tmux-disk-revamped) | Disk usage for your tmux status bar, without ever blocking the status render |
-| [`tmux-extract-revamped`](https://github.com/tmux-revamped/tmux-extract-revamped) | Fuzzy-grab any URL, path, or word off the screen and paste it, pure shell, no Python |
-| [`tmux-fzf-revamped`](https://github.com/tmux-revamped/tmux-fzf-revamped) | Jump to any session, window, or pane, or kill it, from one fzf popup |
-| [`tmux-git-revamped`](https://github.com/tmux-revamped/tmux-git-revamped) | Git repository status in your tmux status bar, without ever blocking the render |
-| [`tmux-gpu-revamped`](https://github.com/tmux-revamped/tmux-gpu-revamped) | GPU load, temperature, frequency, and memory for your tmux status bar |
-| [`tmux-kube-revamped`](https://github.com/tmux-revamped/tmux-kube-revamped) | Current Kubernetes context and namespace in your tmux status bar, async, kubectl-free, never blocking |
+| [`tmux-extract-revamped`](https://github.com/tmux-revamped/tmux-extract-revamped) | Pick a URL, path, hash or any other token off the screen with fzf and type it at the cursor, in pure shell |
+| [`tmux-fzf-revamped`](https://github.com/tmux-revamped/tmux-fzf-revamped) | Switch to, kill, rename or create tmux sessions, windows and panes from fzf pickers in a popup |
+| [`tmux-git-revamped`](https://github.com/tmux-revamped/tmux-git-revamped) | Show the active pane's git branch, changes and provider counts in the tmux status bar without blocking it |
+| [`tmux-gpu-revamped`](https://github.com/tmux-revamped/tmux-gpu-revamped) | GPU load, temperature, clock, power and memory in the tmux status bar, from NVIDIA, AMD, Intel and Apple GPUs |
+| [`tmux-kube-revamped`](https://github.com/tmux-revamped/tmux-kube-revamped) | Current Kubernetes context and namespace in the tmux status bar, parsed from kubeconfig without kubectl |
 | [`tmux-launcher-revamped`](https://github.com/tmux-revamped/tmux-launcher-revamped) | Launch any TUI app in a popup or a window, scoped to the current pane's directory, with one configurable bindi |
 | [`tmux-logging-revamped`](https://github.com/tmux-revamped/tmux-logging-revamped) | Capture any pane to a file: live logging, full scrollback, or a one-shot screenshot |
 | [`tmux-music-revamped`](https://github.com/tmux-revamped/tmux-music-revamped) | Now playing in your tmux status bar, without ever blocking the status render |
 | [`tmux-network-revamped`](https://github.com/tmux-revamped/tmux-network-revamped) | Network throughput in your tmux status bar, without ever blocking the render |
 | [`tmux-pain-control-revamped`](https://github.com/tmux-revamped/tmux-pain-control-revamped) | Standard pane and window management bindings for tmux, version aware, vim friendly, and fully configurable |
-| [`tmux-persist-revamped`](https://github.com/tmux-revamped/tmux-persist-revamped) | **this plugin**, Save, auto-save, and restore your whole tmux environment, one plugin, no status-line tricks |
-| [`tmux-plugin-template`](https://github.com/tmux-revamped/tmux-plugin-template) | A template for building non-blocking tmux status plugins |
-| [`tmux-pomodoro-revamped`](https://github.com/tmux-revamped/tmux-pomodoro-revamped) | A Pomodoro timer in your tmux status bar, with zero temp files: all state lives in tmux options |
-| [`tmux-ram-revamped`](https://github.com/tmux-revamped/tmux-ram-revamped) | RAM usage for your tmux status bar, without ever blocking the status render |
-| [`tmux-reorder-revamped`](https://github.com/tmux-revamped/tmux-reorder-revamped) | Drag a window tab on the status bar with the mouse to move that window |
-| [`tmux-scroll-revamped`](https://github.com/tmux-revamped/tmux-scroll-revamped) | Mouse wheel that does the right thing: scroll the app directly, copy-mode everywhere else. No app names to con |
-| [`tmux-sensible-revamped`](https://github.com/tmux-revamped/tmux-sensible-revamped) | Sensible tmux defaults that normalize behavior across every tmux version, OS, and terminal, without clobbering |
-| [`tmux-tiling-revamped`](https://github.com/tmux-revamped/tmux-tiling-revamped) | BSP tiling window management for tmux. Eight layouts, nineteen operations, zero dependencies |
-| [`tmux-time-revamped`](https://github.com/tmux-revamped/tmux-time-revamped) | Local clock and world clocks in your tmux status bar, without ever blocking the render |
-| [`tmux-weather-revamped`](https://github.com/tmux-revamped/tmux-weather-revamped) | Weather in your tmux status bar, fetched in the background so the render never waits on the network |
+| [`tmux-persist-revamped`](https://github.com/tmux-revamped/tmux-persist-revamped) | **this plugin**, Save every tmux session, window and pane, auto-save on a timer, and restore it all after a reboot |
+| [`tmux-plugin-template`](https://github.com/tmux-revamped/tmux-plugin-template) | The starting point for a tmux-revamped plugin: shared library, bats harness, CI and family tooling |
+| [`tmux-pomodoro-revamped`](https://github.com/tmux-revamped/tmux-pomodoro-revamped) | A Pomodoro timer in the tmux status bar that keeps all of its state in tmux options, with no temp files |
+| [`tmux-ram-revamped`](https://github.com/tmux-revamped/tmux-ram-revamped) | RAM, swap and memory pressure in the tmux status bar, sampled in the background so the render never waits |
+| [`tmux-reorder-revamped`](https://github.com/tmux-revamped/tmux-reorder-revamped) | Drag a window tab along the tmux status bar with the mouse to move that window |
+| [`tmux-scroll-revamped`](https://github.com/tmux-revamped/tmux-scroll-revamped) | Send the mouse wheel to apps that scroll themselves and into tmux copy-mode everywhere else |
+| [`tmux-sensible-revamped`](https://github.com/tmux-revamped/tmux-sensible-revamped) | Sensible tmux defaults, gated by tmux version and terminal, that leave the options you set alone |
+| [`tmux-tiling-revamped`](https://github.com/tmux-revamped/tmux-tiling-revamped) | Tiling window management for tmux: eight layouts including BSP dwindle and spiral, with layout undo |
+| [`tmux-time-revamped`](https://github.com/tmux-revamped/tmux-time-revamped) | Local and world clocks for the tmux status bar, colored by time of day, with countdowns and a DST warning |
+| [`tmux-weather-revamped`](https://github.com/tmux-revamped/tmux-weather-revamped) | Weather for the tmux status bar from wttr.in, fetched in the background so the status line never waits |
 
 ### Checking an installation
 
