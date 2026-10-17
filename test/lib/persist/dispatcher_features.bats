@@ -525,6 +525,7 @@ teardown() {
 }
 
 @test "features - main passes a slot to save and restore" {
+  # shellcheck disable=SC2120
   persist_save() { echo "SAVE $*"; }
   persist_restore() { echo "RESTORE $*"; }
   [[ "$(persist_main save work)" == "SAVE work" ]]
@@ -580,10 +581,9 @@ teardown() {
 
 @test "features - boot sync installs the login agent when the option is on" {
   tmux set-option -gq "@persist_revamped_boot" "on"
-  local installed=""
   _uname() { printf 'Linux'; }
   _tmux_bin() { printf '/usr/bin/tmux'; }
-  _write_file() { installed="${1}"; printf '%s' "${2}" >"${BATS_TEST_TMPDIR}/agent"; }
+  _write_file() { printf '%s' "${2}" >"${BATS_TEST_TMPDIR}/agent"; }
   _agent_load() { printf 'load %s\n' "${3}"; }
   HOME="${BATS_TEST_TMPDIR}"
 
