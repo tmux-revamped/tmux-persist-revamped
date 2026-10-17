@@ -21,6 +21,7 @@ teardown() {
   function_exists cache_should_refresh
   function_exists cache_refresh_if_stale
   function_exists cache_render
+  function_exists cache_set_if_stale
 }
 
 @test "cache.sh - _cache_opt namespaces the option name" {
@@ -136,7 +137,7 @@ teardown() {
 @test "cache.sh - _cache_spawn runs the worker in the background" {
   unset CACHE_SYNC
   local marker="${TEST_TMPDIR}/ran"
-  _worker() { echo done > "$1"; }
+  _worker() { echo "done" > "$1"; }
   _cache_spawn percent _worker "${marker}"
   local i
   for (( i=0; i<50; i++ )); do
@@ -159,4 +160,33 @@ teardown() {
     sleep 0.05
   done
   [[ -f "${marker}" ]]
+}
+
+@test "cache.sh - cache_set_if_stale keeps a fresh value" {
+  cache_set percent "keep"
+  export MOCK_EPOCH=1000003
+  _probe() { echo "changed"; }
+  cache_set_if_stale percent 5 _probe
+  [[ "$(cache_get percent)" == "keep" ]]
+}
+
+@test "cache.sh - cache_set_if_stale recomputes a stale value" {
+  cache_set percent "keep"
+  export MOCK_EPOCH=1000010
+  _probe() { echo "changed"; }
+  cache_set_if_stale percent 5 _probe
+  [[ "$(cache_get percent)" == "changed" ]]
+}
+
+@test "cache.sh - cache_set_if_stale computes a never-written value" {
+  _probe() { echo "fresh"; }
+  cache_set_if_stale percent 5 _probe
+  [[ "$(cache_get percent)" == "fresh" ]]
+}
+
+@test "cache.sh - cache_set_if_stale forwards args to the producer" {
+  export MOCK_EPOCH=1000010
+  _probe() { echo "v=${1}"; }
+  cache_set_if_stale percent 5 _probe hello
+  [[ "$(cache_get percent)" == "v=hello" ]]
 }
