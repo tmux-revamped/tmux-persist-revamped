@@ -183,6 +183,20 @@ teardown() {
   [[ "${output}" == *"send-keys -t main:0 vim src/app.ts Enter"* ]]
 }
 
+@test "dispatcher - restore types only the program when the saved line chains commands" {
+  # Arrange
+  mkdir -p "${SAVE}"
+  persist_join pane main 0 0 1 /home/u vim "" "vim notes.md; touch pwned" >"${SAVE}/last.txt"
+  _has_session() { return 1; }
+
+  # Act
+  persist_restore >"${BATS_TEST_TMPDIR}/meta.txt"
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/meta.txt")" != *"pwned"* ]] || false
+  [[ "$(cat "${BATS_TEST_TMPDIR}/meta.txt")" == *"send-keys -t main:0 vim Enter"* ]]
+}
+
 @test "dispatcher - restore falls back to the bare command without saved args" {
   mkdir -p "${SAVE}"
   persist_join pane main 0 0 1 /home/u vim >"${SAVE}/last.txt"

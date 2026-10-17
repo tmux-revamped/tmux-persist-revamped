@@ -28,12 +28,21 @@ strategy_match() {
   return 1
 }
 
+strategy_replay_safe() {
+  local newline=$'\n'
+  case "${1}" in
+    *"${newline}"* | *[\;\|\&\$\`\<\>\(\)\\\'\"\!]*) return 1 ;;
+  esac
+  return 0
+}
+
 # strategy_restore_command CMD FULL -> what to send on restore. FULL is the pane's
-# full command line; CMD is its first word. When FULL is given it is replayed (so
-# arguments such as a filename survive), otherwise the bare command.
+# full command line; CMD is its first word. When FULL is given and holds no shell
+# metacharacter it is replayed (so arguments such as a filename survive),
+# otherwise the bare command.
 strategy_restore_command() {
   local cmd="${1}" full="${2:-}"
-  if [[ -n "${full}" ]]; then
+  if [[ -n "${full}" ]] && strategy_replay_safe "${full}"; then
     printf '%s' "${full}"
   else
     printf '%s' "${cmd}"
@@ -53,5 +62,6 @@ is_shell_cmd() {
 
 export -f strategy_default_list
 export -f strategy_match
+export -f strategy_replay_safe
 export -f strategy_restore_command
 export -f is_shell_cmd

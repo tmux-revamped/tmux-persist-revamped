@@ -58,8 +58,23 @@ teardown() {
 }
 
 @test "strategy - is_shell_cmd rejects programs and the empty value" {
-  ! is_shell_cmd "vim"
-  ! is_shell_cmd "claude"
-  ! is_shell_cmd "htop"
-  ! is_shell_cmd ""
+  ! is_shell_cmd "vim" || false
+  ! is_shell_cmd "claude" || false
+  ! is_shell_cmd "htop" || false
+  ! is_shell_cmd "" || false
+}
+
+@test "strategy - restore refuses to replay a command line with shell metacharacters" {
+  # Arrange
+  local -a unsafe=("vim a; touch x" "less a | wc" "vim a && b" 'vim $(id)' 'vim `id`' "vim a > b" "vim it's" $'vim a\nid')
+  local line
+  local -a got=()
+
+  # Act
+  for line in "${unsafe[@]}"; do
+    got+=("$(strategy_restore_command "vim" "${line}")")
+  done
+
+  # Assert
+  [[ "$(printf '%s\n' "${got[@]}" | sort -u)" == "vim" ]]
 }
