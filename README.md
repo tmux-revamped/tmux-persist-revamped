@@ -13,9 +13,12 @@ auto-save automation that usually ship as two separate plugins.
 
 ## How it works
 
-A save walks the live server through tmux format strings, writes each window and
-pane as one escaped record, and renames the result over the previous save in a
-single step, so an interrupted save never leaves a half-written file. Restore reads
+A save walks the live server through tmux format strings and writes each window
+and pane as one escaped record to a temporary file. Only a complete dump is moved
+into `history/` under a new timestamped name, so an interrupted save never leaves a
+half-written file and never touches an earlier save. The slot's symlink is then
+repointed with `ln -sfn`, which removes and recreates the link, so a restore that
+runs in that instant finds no save rather than a partial one. Restore reads
 that file back, recreates the session tree, returns each pane to its directory, and
 replays an allow-listed program.
 
@@ -154,7 +157,7 @@ Press `prefix + I` to install.
 
 ## Compatibility
 
-Runs on every tmux version TPM supports, with a floor of tmux 1.9, on Linux,
+Requires tmux 3.2 or later, for `display-popup` and named `show-hooks`, on Linux,
 macOS on Intel and Apple Silicon, and WSL. Shell helpers work the same under BSD
 and GNU userlands.
 
@@ -162,10 +165,6 @@ and GNU userlands.
 
 Deferred to a later release, deliberately rather than dropped:
 
-- Pane contents, the scrollback. The repaint methods in common use leave artifacts
-  in the shell history, so this needs a dedicated, tested approach.
-- A program's full command line with arguments. Capturing it reliably means
-  reading per-pane process state, which reintroduces the cost this rewrite avoids.
 - Grouped sessions.
 
 ## Development

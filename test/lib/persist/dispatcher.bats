@@ -208,9 +208,16 @@ teardown() {
   [[ "${output}" == *"send-keys -t main:0 vim Enter"* ]]
 }
 
-@test "dispatcher - ps-forest seam is callable" {
+@test "dispatcher - ps forest uses the procps flags off macOS" {
+  # Arrange
+  uname() { printf 'Linux\n'; }
+  ps() { printf '%s\n' "$*"; }
+
+  # Act
   run _read_ps_forest
-  true
+
+  # Assert
+  [[ "${output}" == "-eo pid=,ppid=,args=" ]]
 }
 
 @test "dispatcher - restore does not type into a pane that is not a shell" {
@@ -355,21 +362,136 @@ teardown() {
   [[ "${output}" == *usage* ]]
 }
 
-@test "dispatcher - live seams are callable against the server" {
+@test "dispatcher - now reads the epoch clock" {
+  # Arrange
+  export MOCK_EPOCH=1234
+
+  # Act
+  run _now
+
+  # Assert
+  [[ "${output}" == "1234" ]]
+}
+
+@test "dispatcher - the window listing asks tmux for every window field" {
+  # Arrange
+  stub_tmux_binary
+  local f="${PERSIST_FIELD_SEP}"
+
+  # Act
+  _list_windows
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "list-windows -a -F #{session_name}${f}#{window_index}${f}#{window_name}${f}#{window_active}${f}#{window_layout}${f}#{window_zoomed_flag}" ]]
+}
+
+@test "dispatcher - the pane listing asks tmux for every pane field" {
+  # Arrange
+  stub_tmux_binary
+  local f="${PERSIST_FIELD_SEP}"
+
+  # Act
+  _list_panes
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "list-panes -a -F #{session_name}${f}#{window_index}${f}#{pane_index}${f}#{pane_active}${f}#{pane_current_path}${f}#{pane_current_command}${f}#{pane_pid}" ]]
+}
+
+@test "dispatcher - tmux writes run for real outside a dry run" {
+  # Arrange
+  stub_tmux_binary
   unset PERSIST_DRY_RUN
-  _now >"${BATS_TEST_TMPDIR}/now" 2>&1 || true
-  [[ "$(cat "${BATS_TEST_TMPDIR}/now")" =~ ^[0-9]+$ ]]
-  _list_windows >/dev/null 2>&1 || true
-  _list_panes >/dev/null 2>&1 || true
-  _tmux list-windows >/dev/null 2>&1 || true
-  _has_session "no_such_session_xyz" >/dev/null 2>&1 || true
-  _mktemp "${BATS_TEST_TMPDIR}" >/dev/null 2>&1 || true
-  _pane_current_command "no_such_session_xyz:0" >/dev/null 2>&1 || true
-  _socket_path >/dev/null 2>&1 || true
-  _hostname >/dev/null 2>&1 || true
-  _uname >/dev/null 2>&1 || true
-  _tmux_bin >/dev/null 2>&1 || true
-  _save_body "${BATS_TEST_TMPDIR}/absent" >/dev/null 2>&1 || true
+
+  # Act
+  _tmux select-window -t main:0
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "select-window -t main:0" ]]
+}
+
+@test "dispatcher - mktemp creates a hidden save file in the directory" {
+  # Arrange
+  local dir="${BATS_TEST_TMPDIR}/tmpdir"
+  mkdir -p "${dir}"
+
+  # Act
+  run _mktemp "${dir}"
+
+  # Assert
+  [ -f "${output}" ]
+  [[ "${output}" == "${dir}/.save."* ]]
+}
+
+@test "dispatcher - the pane command probe asks tmux outside a dry run" {
+  # Arrange
+  stub_tmux_binary
+  unset PERSIST_DRY_RUN
+
+  # Act
+  _pane_current_command "main:0"
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "display-message -p -t main:0 #{pane_current_command}" ]]
+}
+
+@test "dispatcher - the socket path probe asks tmux for the socket" {
+  # Arrange
+  stub_tmux_binary
+
+  # Act
+  _socket_path
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "display-message -p #{socket_path}" ]]
+}
+
+@test "dispatcher - hostname reports the host name" {
+  # Arrange
+  hostname() { printf 'box\n'; }
+
+  # Act
+  run _hostname
+
+  # Assert
+  [[ "${output}" == "box" ]]
+}
+
+@test "dispatcher - uname reports the kernel name" {
+  # Arrange
+  uname() { printf 'Darwin\n'; }
+
+  # Act
+  run _uname
+
+  # Assert
+  [[ "${output}" == "Darwin" ]]
+}
+
+@test "dispatcher - tmux_bin resolves tmux on PATH" {
+  # Arrange
+  stub_tmux_binary
+  unset -f tmux
+
+  # Act
+  run _tmux_bin
+
+  # Assert
+  [[ "${output}" == "${BATS_TEST_TMPDIR}/tmuxbin/tmux" ]]
+}
+
+@test "dispatcher - save body drops the header record" {
+  # Arrange
+  local file="${BATS_TEST_TMPDIR}/body.txt"
+  {
+    persist_join window main 0 e 1 lay0 0
+    persist_join header 1 /home/u 1000
+  } >"${file}"
+
+  # Act
+  run _save_body "${file}"
+
+  # Assert
+  [[ "${output}" == "$(persist_join window main 0 e 1 lay0 0)" ]]
 }
 
 stub_tmux_binary() {
@@ -518,9 +640,15 @@ stub_agent_tools() {
   [ "${status}" -ne 0 ]
 }
 
-@test "dispatcher - capture-pane seam is callable" {
-  run _capture_pane "main:0"
-  true
+@test "dispatcher - capture pane asks tmux for the pane's text" {
+  # Arrange
+  stub_tmux_binary
+
+  # Act
+  _capture_pane "main:0.1"
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "capture-pane -p -t main:0.1" ]]
 }
 
 @test "dispatcher - save dir gives a non-default socket its own subdirectory" {

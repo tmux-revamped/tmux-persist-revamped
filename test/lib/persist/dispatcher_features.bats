@@ -417,9 +417,15 @@ teardown() {
 }
 
 @test "features - ps forest uses the BSD branch on Darwin" {
+  # Arrange
   uname() { echo Darwin; }
+  ps() { printf '%s\n' "$*"; }
+
+  # Act
   run _read_ps_forest
-  true
+
+  # Assert
+  [[ "${output}" == "-axo pid=,ppid=,command=" ]]
 }
 
 # --- event-based debounced saves -------------------------------------------
