@@ -117,7 +117,7 @@ Run any of these as `bash <plugin>/src/persist.sh <command>`, or bind them to ke
 | `@persist_revamped_vim_sessions` | `off` | when `on`, reopen an editor with `-S` if a `Session.vim` sits in the pane's directory |
 | `@persist_revamped_rewrite_home` | `off` | when `on`, rewrite a saved home prefix to the current home on restore, for moving a save between machines |
 | `@persist_revamped_backups` | `5` | how many saves the history keeps per slot, the current one included; the floor is one |
-| `@persist_revamped_event_debounce` | `0` | seconds; when above `0`, genuine close events trigger a debounced save |
+| `@persist_revamped_event_debounce` | `0` | seconds; when above `0`, genuine close events trigger a debounced save. The plugin appends its own `session-closed` and `window-unlinked` hooks beside any you set, and removes only its own when this is `0` |
 | `@persist_revamped_stale_secs` | `0` | `verify` flags a save older than this many seconds; `0` disables the staleness check |
 | `@persist_revamped_pre_save_hook` | empty | shell command run before each save |
 | `@persist_revamped_post_save_hook` | empty | shell command run after a successful save |

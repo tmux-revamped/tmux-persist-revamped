@@ -119,3 +119,45 @@ run_entry() {
   # Assert
   [[ "${output}" == "${expected}" ]]
 }
+
+@test "entry point - event saves keep a hook the user already set" {
+  # Arrange
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_event_debounce' '5'
+  command tmux -S "${SOCKET}" set-hook -g session-closed 'set-option -gq @user_hook_ran 1'
+
+  # Act
+  run_entry
+
+  # Assert
+  run command tmux -S "${SOCKET}" show-hooks -g session-closed
+  [[ "${output}" == *"@user_hook_ran"* ]] || false
+  [[ "${output}" == *"persist.sh' event"* ]]
+}
+
+@test "entry point - a second load adds no second event hook" {
+  # Arrange
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_event_debounce' '5'
+  run_entry
+
+  # Act
+  run_entry
+
+  # Assert
+  [ "$(command tmux -S "${SOCKET}" show-hooks -g window-unlinked | grep -c "persist.sh")" -eq 1 ]
+}
+
+@test "entry point - turning event saves off removes only the plugin's hook" {
+  # Arrange
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_event_debounce' '5'
+  command tmux -S "${SOCKET}" set-hook -g session-closed 'set-option -gq @user_hook_ran 1'
+  run_entry
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_event_debounce' '0'
+
+  # Act
+  run_entry
+
+  # Assert
+  run command tmux -S "${SOCKET}" show-hooks -g session-closed
+  [[ "${output}" == *"@user_hook_ran"* ]] || false
+  [[ "${output}" != *"persist.sh"* ]]
+}
