@@ -329,7 +329,7 @@ persist_rotate_backups() {
   base="$(backup_history_base "${target}")"
   while IFS= read -r victim; do
     [[ -n "${victim}" ]] && rm -f "${hdir}/${victim}"
-  done < <(backup_prune_list "$(_list_dir "${hdir}" "$(backup_history_glob "${base}")")" "${keep}")
+  done < <(backup_prune_list "$(backup_history_entries "${base}" "$(_list_dir "${hdir}" "$(backup_history_glob "${base}")")")" "${keep}")
   return 0
 }
 

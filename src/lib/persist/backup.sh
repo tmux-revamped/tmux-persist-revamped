@@ -35,6 +35,19 @@ backup_history_glob() {
   printf '%s-*.txt' "${1}"
 }
 
+backup_history_entries() {
+  local base="${1}" listing="${2}" line stamp
+  local prefix="${base}-" suffix=".txt"
+  while IFS= read -r line; do
+    [[ "${line}" == "${prefix}"*"${suffix}" ]] || continue
+    stamp="${line#"${prefix}"}"
+    stamp="${stamp%"${suffix}"}"
+    [[ "${stamp}" =~ ^[0-9]+$ ]] || continue
+    printf '%s\n' "${line}"
+  done <<< "${listing}"
+  return 0
+}
+
 # backup_prune_list LISTING MAX -> the backup file names in LISTING (one per line)
 # that must be deleted so at most MAX newest remain. Oldest names are emitted first.
 # A MAX of zero prunes everything; nothing is emitted when the count is within MAX.
@@ -64,4 +77,5 @@ export -f backup_name
 export -f backup_history_base
 export -f backup_history_name
 export -f backup_history_glob
+export -f backup_history_entries
 export -f backup_prune_list
