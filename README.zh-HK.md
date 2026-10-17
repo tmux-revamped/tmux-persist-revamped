@@ -4,18 +4,18 @@
 
 <strong>儲存 tmux 的所有工作階段、視窗及窗格，按計時器自動儲存，並在重新開機後全部還原。</strong>
 
-[English](README.md) &nbsp;|&nbsp; [日本語](README.ja.md) &nbsp;|&nbsp; [简体中文](README.zh-Hans.md) &nbsp;|&nbsp; 繁體中文（香港）
+[English](README.md) | [日本語](README.ja.md) | [简体中文](README.zh-Hans.md) | 繁體中文（香港）
 
 [![Tests](https://github.com/tmux-revamped/tmux-persist-revamped/actions/workflows/tests.yml/badge.svg)](https://github.com/tmux-revamped/tmux-persist-revamped/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
 
 <p align="center">
-  <a href="#what-it-does">功能</a> &nbsp;|&nbsp;
-  <a href="#installation">安裝</a> &nbsp;|&nbsp;
-  <a href="#usage">用法</a> &nbsp;|&nbsp;
-  <a href="#configuration">設定</a> &nbsp;|&nbsp;
-  <a href="#key-bindings">按鍵綁定</a> &nbsp;|&nbsp;
+  <a href="#what-it-does">功能</a> |
+  <a href="#installation">安裝</a> |
+  <a href="#usage">用法</a> |
+  <a href="#configuration">設定</a> |
+  <a href="#key-bindings">按鍵綁定</a> |
   <a href="#how-it-works">運作原理</a>
 </p>
 
