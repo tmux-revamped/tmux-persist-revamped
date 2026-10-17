@@ -44,8 +44,8 @@ teardown() {
 }
 
 @test "dispatcher - dump emits a window record then a pane record" {
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim"; }
   persist_dump >"${BATS_TEST_TMPDIR}/dump.txt"
   run cat "${BATS_TEST_TMPDIR}/dump.txt"
   [[ "${lines[0]}" == window* ]]
@@ -55,8 +55,8 @@ teardown() {
 }
 
 @test "dispatcher - save writes last.txt and round-trips through restore" {
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim"; }
   run persist_save
   [ "${status}" -eq 0 ]
   [ -f "${SAVE}/last.txt" ]
@@ -109,8 +109,8 @@ teardown() {
 
 @test "dispatcher - dump captures stripped pane content when enabled" {
   tmux set-option -gq "@persist_revamped_capture_panes" "on"
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim"; }
   _capture_pane() { printf 'line one\nline two\n\n\n'; }
   persist_dump >"${BATS_TEST_TMPDIR}/d.txt"
   run cat "${BATS_TEST_TMPDIR}/d.txt"
@@ -165,8 +165,8 @@ teardown() {
 
 @test "dispatcher - dump captures the full command line when args are enabled" {
   tmux set-option -gq "@persist_revamped_capture_args" "on"
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim	2000"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim${PERSIST_FIELD_SEP}2000"; }
   _read_ps_forest() { printf '%s\n' "$(printf '2000 1 -bash\n2100 2000 vim src/app.ts')"; }
   persist_dump >"${BATS_TEST_TMPDIR}/da.txt"
   run cat "${BATS_TEST_TMPDIR}/da.txt"
@@ -415,6 +415,7 @@ teardown() {
 }
 
 @test "dispatcher - save dir expands a tilde in the option" {
+  # shellcheck disable=SC2088
   tmux set-option -gq "@persist_revamped_dir" "~/state/persist"
 
   run persist_save_dir
@@ -423,8 +424,8 @@ teardown() {
 }
 
 @test "dispatcher - save refuses to replace a populated save with an empty dump" {
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim"; }
   persist_save
   local before
   before="$(cat "${SAVE}/last.txt")"
@@ -448,8 +449,8 @@ teardown() {
 }
 
 @test "dispatcher - save refuses to run while another save holds the lock" {
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim"; }
   mkdir -p "${SAVE}/.save.lock"
 
   run persist_save
@@ -459,8 +460,8 @@ teardown() {
 }
 
 @test "dispatcher - save takes over a lock left behind by a killed save" {
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim"; }
   mkdir -p "${SAVE}/.save.lock"
   touch -t 197001010000 "${SAVE}/.save.lock"
 
@@ -471,8 +472,8 @@ teardown() {
 }
 
 @test "dispatcher - save releases the lock so the next save can run" {
-  _list_windows() { printf '%s\n' "main	0	editor	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	vim"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}editor${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}vim"; }
   persist_save
 
   run persist_save

@@ -61,6 +61,7 @@ readonly PERSIST_OPT_EVENT_DEBOUNCE="@persist_revamped_event_debounce"
 readonly PERSIST_OPT_EVENT_TS="@persist_revamped_event_ts"
 readonly PERSIST_OPT_PRE_SAVE="@persist_revamped_pre_save_hook"
 readonly PERSIST_OPT_POST_SAVE="@persist_revamped_post_save_hook"
+readonly PERSIST_FIELD_SEP=$'\x1f'
 
 # --- tmux seams (tests override these) -------------------------------------
 
@@ -117,13 +118,15 @@ _files_identical() {
 }
 
 _list_windows() {
+  local f="${PERSIST_FIELD_SEP}"
   command tmux list-windows -a -F \
-    '#{session_name}	#{window_index}	#{window_name}	#{window_active}	#{window_layout}	#{window_zoomed_flag}' 2>/dev/null
+    "#{session_name}${f}#{window_index}${f}#{window_name}${f}#{window_active}${f}#{window_layout}${f}#{window_zoomed_flag}" 2>/dev/null
 }
 
 _list_panes() {
+  local f="${PERSIST_FIELD_SEP}"
   command tmux list-panes -a -F \
-    '#{session_name}	#{window_index}	#{pane_index}	#{pane_active}	#{pane_current_path}	#{pane_current_command}	#{pane_pid}' 2>/dev/null
+    "#{session_name}${f}#{window_index}${f}#{pane_index}${f}#{pane_active}${f}#{pane_current_path}${f}#{pane_current_command}${f}#{pane_pid}" 2>/dev/null
 }
 
 _has_session() {
@@ -293,14 +296,14 @@ persist_sensitive_list() {
 persist_dump() {
   local s wi wn wa wl wz pi pa pp pc pid capture capture_args content full forest=""
   local redact
-  while IFS=$'\t' read -r s wi wn wa wl wz; do
+  while IFS="${PERSIST_FIELD_SEP}" read -r s wi wn wa wl wz; do
     [[ -n "${s}" ]] && persist_join "window" "${s}" "${wi}" "${wn}" "${wa}" "${wl}" "${wz}"
   done < <(_list_windows)
   capture="$(get_tmux_option "${PERSIST_OPT_CAPTURE}" "off")"
   capture_args="$(get_tmux_option "${PERSIST_OPT_CAPTURE_ARGS}" "off")"
   redact="$(persist_sensitive_list)"
   [[ "${capture_args}" == "on" ]] && forest="$(_read_ps_forest)"
-  while IFS=$'\t' read -r s wi pi pa pp pc pid; do
+  while IFS="${PERSIST_FIELD_SEP}" read -r s wi pi pa pp pc pid; do
     [[ -n "${s}" ]] || continue
     content=""
     if [[ "${capture}" == "on" ]] && ! transform_is_sensitive "${pc}" "${redact}"; then

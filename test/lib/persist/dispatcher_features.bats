@@ -42,7 +42,7 @@ teardown() {
 @test "features - capture redacts a sensitive pane" {
   tmux set-option -gq "@persist_revamped_capture_panes" "on"
   _list_windows() { :; }
-  _list_panes() { printf 'main\t0\t0\t1\t/h\tssh\t1\n'; }
+  _list_panes() { printf 'main\0370\0370\0371\037/h\037ssh\0371\n'; }
   _capture_pane() { printf 'TOPSECRET\n'; }
   persist_dump >"${BATS_TEST_TMPDIR}/r.txt"
   run cat "${BATS_TEST_TMPDIR}/r.txt"
@@ -52,18 +52,45 @@ teardown() {
 @test "features - capture keeps a non-sensitive pane" {
   tmux set-option -gq "@persist_revamped_capture_panes" "on"
   _list_windows() { :; }
-  _list_panes() { printf 'main\t0\t0\t1\t/h\tbash\t1\n'; }
+  _list_panes() { printf 'main\0370\0370\0371\037/h\037bash\0371\n'; }
   _capture_pane() { printf 'visible text\n'; }
   persist_dump >"${BATS_TEST_TMPDIR}/k.txt"
   run cat "${BATS_TEST_TMPDIR}/k.txt"
   [[ "${output}" == *"visible text"* ]]
 }
 
+@test "features - an empty pane path cannot shift the command past redaction" {
+  # Arrange
+  tmux set-option -gq "@persist_revamped_capture_panes" "on"
+  _list_windows() { :; }
+  _list_panes() { printf 'main\0370\0370\0371\037\037ssh\0374242\n'; }
+  _capture_pane() { printf 'TOPSECRET\n'; }
+
+  # Act
+  persist_dump >"${BATS_TEST_TMPDIR}/shift.txt"
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/shift.txt")" != *TOPSECRET* ]] || false
+  [[ "$(head -n 1 "${BATS_TEST_TMPDIR}/shift.txt")" == "$(persist_join pane main 0 0 1 "" ssh "" "")" ]]
+}
+
+@test "features - an empty window name keeps the later window fields in place" {
+  # Arrange
+  _list_windows() { printf 'main\0371\037\0371\037lay1\0370\n'; }
+  _list_panes() { :; }
+
+  # Act
+  persist_dump >"${BATS_TEST_TMPDIR}/wn.txt"
+
+  # Assert
+  [[ "$(head -n 1 "${BATS_TEST_TMPDIR}/wn.txt")" == "$(persist_join window main 1 "" 1 lay1 0)" ]]
+}
+
 # --- schema header and zoom capture ----------------------------------------
 
 @test "features - dump appends a schema header record" {
-  _list_windows() { printf 'main\t0\te\t1\tlay\t0\n'; }
-  _list_panes() { printf 'main\t0\t0\t1\t/h\tbash\t1\n'; }
+  _list_windows() { printf 'main\0370\037e\0371\037lay\0370\n'; }
+  _list_panes() { printf 'main\0370\0370\0371\037/h\037bash\0371\n'; }
   persist_dump >"${BATS_TEST_TMPDIR}/d.txt"
   run cat "${BATS_TEST_TMPDIR}/d.txt"
   local last="${lines[$(( ${#lines[@]} - 1 ))]}"
@@ -72,7 +99,7 @@ teardown() {
 }
 
 @test "features - dump records the window zoom flag" {
-  _list_windows() { printf 'main\t0\te\t1\tlay\t1\n'; }
+  _list_windows() { printf 'main\0370\037e\0371\037lay\0371\n'; }
   _list_panes() { :; }
   persist_dump >"${BATS_TEST_TMPDIR}/z.txt"
   run cat "${BATS_TEST_TMPDIR}/z.txt"
@@ -83,7 +110,7 @@ teardown() {
 # --- named slots: save, restore, list --------------------------------------
 
 @test "features - save writes a named slot file" {
-  _list_windows() { printf 'main\t0\te\t1\tlay\t0\n'; }
+  _list_windows() { printf 'main\0370\037e\0371\037lay\0370\n'; }
   _list_panes() { :; }
   run persist_save work
   [ "${status}" -eq 0 ]
@@ -123,11 +150,11 @@ teardown() {
 
 @test "features - save keeps only the current entry when history is disabled" {
   tmux set-option -gq "@persist_revamped_backups" "0"
-  _list_windows() { printf '%s\n' "main	0	one	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}one${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}zsh"; }
   export MOCK_EPOCH=100
   persist_save
-  _list_windows() { printf '%s\n' "main	0	two	1	lay0"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}two${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
   export MOCK_EPOCH=200
 
   persist_save
@@ -163,8 +190,8 @@ teardown() {
 }
 
 @test "features - the slot file is a symlink into the history directory" {
-  _list_windows() { printf '%s\n' "main	0	one	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}one${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}zsh"; }
   export MOCK_EPOCH=100
 
   persist_save
@@ -176,8 +203,8 @@ teardown() {
 
 @test "features - an unchanged environment adds no history entry" {
   tmux set-option -gq "@persist_revamped_backups" "5"
-  _list_windows() { printf '%s\n' "main	0	one	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}one${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}zsh"; }
   export MOCK_EPOCH=100
   persist_save
   export MOCK_EPOCH=200
@@ -191,8 +218,8 @@ teardown() {
 @test "features - a save file written before the history existed is adopted, never lost" {
   mkdir -p "${SAVE}"
   printf 'window\tlegacy\n' >"${SAVE}/last.txt"
-  _list_windows() { printf '%s\n' "main	0	new	1	lay0"; }
-  _list_panes() { printf '%s\n' "main	0	0	1	/home/u	zsh"; }
+  _list_windows() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}new${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}lay0"; }
+  _list_panes() { printf '%s\n' "main${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}0${PERSIST_FIELD_SEP}1${PERSIST_FIELD_SEP}/home/u${PERSIST_FIELD_SEP}zsh"; }
   export MOCK_EPOCH=500
 
   persist_save

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reading the window and pane listings split fields on tabs, and tab is
+  whitespace to `read`, so an empty window name or pane path shifted every
+  later field. An empty path moved the pane's command out of its slot, which
+  let a sensitive pane such as `ssh` be captured despite redaction. The
+  listings now use an ASCII unit separator.
 - Pruning a named slot's history also deleted the history of any slot whose
   name extends it, so trimming `work` removed saves of `work-2`. Pruning now
   considers only files named exactly after the slot followed by a timestamp.
