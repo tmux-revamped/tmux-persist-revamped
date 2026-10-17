@@ -12,7 +12,9 @@ setup() {
   # Point any real tmux call at an empty socket dir so the live-seam test can
   # never read or mutate the developer's running tmux server.
   export TMUX_TMPDIR="${BATS_TEST_TMPDIR}/tmuxsock"
-  mkdir -p "${TMUX_TMPDIR}"
+  export HOME="${BATS_TEST_TMPDIR}/home"
+  export XDG_STATE_HOME="${BATS_TEST_TMPDIR}/xdgstate"
+  mkdir -p "${TMUX_TMPDIR}" "${HOME}" "${XDG_STATE_HOME}"
   unset TMUX
   PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../../.."
   export PERSIST_DRY_RUN=1
@@ -370,18 +372,98 @@ teardown() {
   _save_body "${BATS_TEST_TMPDIR}/absent" >/dev/null 2>&1 || true
 }
 
-@test "dispatcher - the agent seams are callable and never fail the caller" {
-  unset PERSIST_DRY_RUN
+stub_agent_tools() {
+  local bin="${BATS_TEST_TMPDIR}/bin" tool
+  mkdir -p "${bin}"
+  for tool in launchctl systemctl; do
+    printf '#!/bin/sh\nprintf "%%s %%s\\n" "%s" "$*" >>"%s"\nexit 1\n' "${tool}" "${BATS_TEST_TMPDIR}/calls" >"${bin}/${tool}"
+    chmod +x "${bin}/${tool}"
+  done
+  PATH="${bin}:${PATH}"
+}
+
+@test "dispatcher - write_file writes the agent content" {
+  # Arrange
   local agent="${BATS_TEST_TMPDIR}/agent/unit.service"
 
+  # Act
   run _write_file "${agent}" "content"
 
+  # Assert
   [ "${status}" -eq 0 ]
   [[ "$(cat "${agent}")" == "content" ]]
-  _agent_load Linux "${agent}" unit >/dev/null 2>&1
-  _agent_load Darwin "${agent}" unit >/dev/null 2>&1
-  _agent_unload Linux "${agent}" unit >/dev/null 2>&1
-  _agent_unload Darwin "${agent}" unit >/dev/null 2>&1
+}
+
+@test "dispatcher - agent load on macOS unloads then loads and never fails the caller" {
+  # Arrange
+  stub_agent_tools
+
+  # Act
+  run _agent_load Darwin /agents/unit.plist unit
+
+  # Assert
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/calls")" == $'launchctl unload /agents/unit.plist\nlaunchctl load /agents/unit.plist' ]]
+}
+
+@test "dispatcher - agent load on Linux reloads systemd and enables the unit" {
+  # Arrange
+  stub_agent_tools
+
+  # Act
+  run _agent_load Linux /agents/unit.service unit
+
+  # Assert
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/calls")" == $'systemctl --user daemon-reload\nsystemctl --user enable unit' ]]
+}
+
+@test "dispatcher - agent unload on macOS unloads the plist" {
+  # Arrange
+  stub_agent_tools
+
+  # Act
+  run _agent_unload Darwin /agents/unit.plist unit
+
+  # Assert
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/calls")" == "launchctl unload /agents/unit.plist" ]]
+}
+
+@test "dispatcher - agent unload on Linux disables the unit then reloads systemd" {
+  # Arrange
+  stub_agent_tools
+
+  # Act
+  run _agent_unload Linux /agents/unit.service unit
+
+  # Assert
+  [ "${status}" -eq 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/calls")" == $'systemctl --user disable unit\nsystemctl --user daemon-reload' ]]
+}
+
+@test "dispatcher - agent loaded asks launchctl on macOS" {
+  # Arrange
+  stub_agent_tools
+
+  # Act
+  run _agent_loaded Darwin /agents/unit.plist unit
+
+  # Assert
+  [ "${status}" -ne 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/calls")" == "launchctl list unit" ]]
+}
+
+@test "dispatcher - agent loaded asks systemd on Linux" {
+  # Arrange
+  stub_agent_tools
+
+  # Act
+  run _agent_loaded Linux /agents/unit.service unit
+
+  # Assert
+  [ "${status}" -ne 0 ]
+  [[ "$(cat "${BATS_TEST_TMPDIR}/calls")" == "systemctl --user is-enabled --quiet unit" ]]
 }
 
 @test "dispatcher - write_file fails when the directory cannot be created" {

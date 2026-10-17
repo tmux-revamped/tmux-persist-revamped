@@ -4,6 +4,9 @@ setup() {
   PLUGIN_DIR="${BATS_TEST_DIRNAME}/.."
   ENTRY="${PLUGIN_DIR}/persist-revamped.tmux"
   SOCKET="/tmp/persist-entry-${BASHPID}-${RANDOM}"
+  export HOME="${BATS_TEST_TMPDIR}/home"
+  export XDG_STATE_HOME="${BATS_TEST_TMPDIR}/state"
+  mkdir -p "${HOME}" "${XDG_STATE_HOME}"
   command tmux -S "${SOCKET}" -f /dev/null new-session -d -s test 2>/dev/null
   sleep 0.1
 }
@@ -92,16 +95,27 @@ run_entry() {
     export -f tmux
     PERSIST_WORKER_SLEEP=1 bash "'"${ENTRY}"'" >/dev/null 2>&1
   '
-  local worker server attempt
+  local worker server
   worker="$(command tmux -S "${SOCKET}" show-option -gqv '@persist_revamped_worker_pid')"
   server="$(command tmux -S "${SOCKET}" display-message -p '#{pid}')"
 
   kill -9 "${server}"
 
   [[ -S "${SOCKET}" ]]
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
     process_running "${worker}" || break
     sleep 0.5
   done
   ! process_running "${worker}"
+}
+
+@test "entry point - the server it drives never sees the developer's home" {
+  # Arrange
+  local expected="HOME=${BATS_TEST_TMPDIR}/home"
+
+  # Act
+  run command tmux -S "${SOCKET}" show-environment -g HOME
+
+  # Assert
+  [[ "${output}" == "${expected}" ]]
 }
