@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A restore replayed a pane's saved full command line by typing it into the
+  shell, so a line holding `;`, `|`, `&`, `$(`, backticks, quotes or
+  redirections ran differently from the original program. Such a line now
+  restores only the bare program name.
 - Reading the window and pane listings split fields on tabs, and tab is
   whitespace to `read`, so an empty window name or pane path shifted every
   later field. An empty path moved the pane's command out of its slot, which
