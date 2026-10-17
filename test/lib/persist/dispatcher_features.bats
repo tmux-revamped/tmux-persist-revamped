@@ -708,3 +708,22 @@ teardown() {
   run persist_main boot-uninstall
   [ "${status}" -eq 0 ]
 }
+
+@test "features - pruning one slot's history never deletes a slot whose name extends it" {
+  # Arrange
+  tmux set-option -gq "@persist_revamped_backups" "1"
+  mkdir -p "${SAVE}/slots/history"
+  : >"${SAVE}/slots/history/work-100.txt"
+  : >"${SAVE}/slots/history/work-200.txt"
+  : >"${SAVE}/slots/history/work-2-50.txt"
+  : >"${SAVE}/slots/history/work-2-60.txt"
+
+  # Act
+  persist_rotate_backups "${SAVE}/slots/work.txt"
+
+  # Assert
+  [ ! -e "${SAVE}/slots/history/work-100.txt" ]
+  [ -f "${SAVE}/slots/history/work-200.txt" ]
+  [ -f "${SAVE}/slots/history/work-2-50.txt" ]
+  [ -f "${SAVE}/slots/history/work-2-60.txt" ]
+}

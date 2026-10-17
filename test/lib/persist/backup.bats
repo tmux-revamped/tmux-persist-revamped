@@ -47,3 +47,16 @@ teardown() {
   [[ "${lines[0]}" == "last-100.txt" ]]
   [[ "${lines[1]}" == "last-200.txt" ]]
 }
+
+@test "backup - history entries keep only the named slot's stamped files" {
+  # Arrange
+  local listing=$'work-100.txt\nwork-2-150.txt\nwork-200.txt\nwork-old.txt\nwork-2-300.txt'
+
+  # Act
+  run backup_history_entries "work" "${listing}"
+
+  # Assert
+  [ "${#lines[@]}" -eq 2 ]
+  [[ "${lines[0]}" == "work-100.txt" ]] || false
+  [[ "${lines[1]}" == "work-200.txt" ]]
+}

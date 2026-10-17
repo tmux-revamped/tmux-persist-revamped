@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pruning a named slot's history also deleted the history of any slot whose
+  name extends it, so trimming `work` removed saves of `work-2`. Pruning now
+  considers only files named exactly after the slot followed by a timestamp.
 - The auto-save worker ran until its socket file disappeared, and a server
   killed without cleanup leaves that file behind, so one worker per such server
   ran forever; seven had piled up on one machine. The worker now exits once the
