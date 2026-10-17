@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Turning on event saves replaced any `session-closed` or `window-unlinked`
+  hook the user had set, because the plugin set the whole hook array. It now
+  appends its hook once, leaves other hooks alone, and removes only its own
+  hook when event saves are off.
 - Any server whose socket file was named `default`, such as one started with
   `-S /some/dir/default`, saved over the default server's file. Only the real
   default socket under `${TMUX_TMPDIR:-/tmp}/tmux-<uid>/` saves at the top

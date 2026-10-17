@@ -37,15 +37,29 @@ tmux run-shell -b "bash '${DISPATCH}' boot-sync"
 # first auto-saves and avoid clobbering what was just restored.
 tmux run-shell -b "bash '${DISPATCH}' boot"
 
+own_hook_indices() {
+  local line idx
+  tmux show-hooks -g "${1}" 2>/dev/null | while IFS= read -r line; do
+    [[ "${line}" == *"${DISPATCH}"* ]] || continue
+    idx="${line%%\]*}"
+    printf '%s\n' "${idx#*\[}"
+  done
+}
+
 # Opt-in event-based saves. When a debounce window is configured, genuine close
 # events trigger a debounced save. Only close events are wired so a save can never
 # fire while a restore is still creating windows.
 event_debounce="$(opt '@persist_revamped_event_debounce' '0')"
-if [[ "${event_debounce}" =~ ^[0-9]+$ ]] && (( event_debounce > 0 )); then
-  for hook in session-closed window-unlinked; do
-    tmux set-hook -g "${hook}" "run-shell -b \"bash '${DISPATCH}' event\""
-  done
-fi
+for hook in session-closed window-unlinked; do
+  if [[ "${event_debounce}" =~ ^[0-9]+$ ]] && (( event_debounce > 0 )); then
+    [[ -n "$(own_hook_indices "${hook}")" ]] ||
+      tmux set-hook -ga "${hook}" "run-shell -b \"bash '${DISPATCH}' event\""
+  else
+    own_hook_indices "${hook}" | while IFS= read -r index; do
+      tmux set-hook -gu "${hook}[${index}]"
+    done
+  fi
+done
 
 # One auto-save worker per server. Kill a stale worker recorded in the server
 # option, then detach a new one that ticks roughly every minute and exits when the
