@@ -723,6 +723,7 @@ teardown() {
   _uname() { printf 'Linux'; }
   _tmux_bin() { printf '/usr/bin/tmux'; }
   _agent_load() { :; }
+  _agent_loaded() { return 0; }
   _agent_unload() { :; }
   HOME="${BATS_TEST_TMPDIR}"
 
@@ -753,4 +754,53 @@ teardown() {
   [ -f "${SAVE}/slots/history/work-200.txt" ]
   [ -f "${SAVE}/slots/history/work-2-50.txt" ]
   [ -f "${SAVE}/slots/history/work-2-60.txt" ]
+}
+
+@test "features - boot install leaves an unchanged loaded agent alone on reload" {
+  # Arrange
+  _uname() { printf 'Darwin'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_loaded() { return 0; }
+  _agent_load() { printf 'load\n' >>"${BATS_TEST_TMPDIR}/loads"; }
+  HOME="${BATS_TEST_TMPDIR}"
+  persist_boot_install >/dev/null
+
+  # Act
+  persist_boot_install >/dev/null
+
+  # Assert
+  [ "$(wc -l <"${BATS_TEST_TMPDIR}/loads" | tr -d ' ')" -eq 1 ]
+}
+
+@test "features - boot install reloads the agent when its content changed" {
+  # Arrange
+  _uname() { printf 'Darwin'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_loaded() { return 0; }
+  _agent_load() { printf 'load\n' >>"${BATS_TEST_TMPDIR}/loads"; }
+  HOME="${BATS_TEST_TMPDIR}"
+  persist_boot_install >/dev/null
+  tmux set-option -gq "@persist_revamped_boot_command" "new-session -d -s work"
+
+  # Act
+  persist_boot_install >/dev/null
+
+  # Assert
+  [ "$(wc -l <"${BATS_TEST_TMPDIR}/loads" | tr -d ' ')" -eq 2 ]
+}
+
+@test "features - boot install loads an unchanged agent that is not loaded" {
+  # Arrange
+  _uname() { printf 'Linux'; }
+  _tmux_bin() { printf '/usr/bin/tmux'; }
+  _agent_loaded() { return 1; }
+  _agent_load() { printf 'load\n' >>"${BATS_TEST_TMPDIR}/loads"; }
+  HOME="${BATS_TEST_TMPDIR}"
+  persist_boot_install >/dev/null
+
+  # Act
+  persist_boot_install >/dev/null
+
+  # Assert
+  [ "$(wc -l <"${BATS_TEST_TMPDIR}/loads" | tr -d ' ')" -eq 2 ]
 }

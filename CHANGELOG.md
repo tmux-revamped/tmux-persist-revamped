@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With `@persist_revamped_boot` on, every config reload unloaded and reloaded
+  the login agent, and because the agent runs at load that ran the boot
+  command again each time. The agent is now written and reloaded only when its
+  content changed or it is not loaded.
 - A restore replayed a pane's saved full command line by typing it into the
   shell, so a line holding `;`, `|`, `&`, `$(`, backticks, quotes or
   redirections ran differently from the original program. Such a line now
