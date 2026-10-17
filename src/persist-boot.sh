@@ -30,6 +30,19 @@ _agent_load() {
   return 0
 }
 
+_read_file() {
+  cat "${1}" 2>/dev/null
+}
+
+_agent_loaded() {
+  local os="${1}" label="${3}"
+  if [[ "${os}" == "Darwin" ]]; then
+    launchctl list "${label}" >/dev/null 2>&1
+  else
+    systemctl --user is-enabled --quiet "${label}" >/dev/null 2>&1
+  fi
+}
+
 _agent_unload() {
   local os="${1}" path="${2}" label="${3}"
   if [[ "${os}" == "Darwin" ]]; then
@@ -62,8 +75,10 @@ persist_boot_install() {
   else
     content="$(boot_unit "${bin}" "${args}")"
   fi
-  _write_file "${path}" "${content}" || { log_error "persist_boot_install" "could not write ${path}"; return 1; }
-  _agent_load "${os}" "${path}" "${label}"
+  if [[ "$(_read_file "${path}")" != "${content}" ]] || ! _agent_loaded "${os}" "${path}" "${label}"; then
+    _write_file "${path}" "${content}" || { log_error "persist_boot_install" "could not write ${path}"; return 1; }
+    _agent_load "${os}" "${path}" "${label}"
+  fi
   printf '%s\n' "${path}"
 }
 
