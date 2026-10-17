@@ -82,6 +82,15 @@ _socket_path() {
   command tmux display-message -p '#{socket_path}' 2>/dev/null
 }
 
+_default_socket_path() {
+  local dir
+  dir="${TMUX_TMPDIR:-/tmp}/tmux-$(id -u 2>/dev/null)"
+  if [[ -d "${dir}" ]]; then
+    dir="$(cd "${dir}" && pwd -P)"
+  fi
+  printf '%s/default' "${dir}"
+}
+
 # _hostname -> this host's name, for expanding $HOSTNAME in the save directory.
 _hostname() {
   hostname 2>/dev/null
@@ -252,7 +261,7 @@ persist_save_dir() {
     printf '%s' "${base}"
     return 0
   fi
-  label="$(servers_socket_label "$(_socket_path)")"
+  label="$(servers_socket_label "$(_socket_path)" "$(_default_socket_path)")"
   servers_scope_dir "${base}" "${label}"
 }
 

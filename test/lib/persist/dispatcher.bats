@@ -528,7 +528,31 @@ stub_agent_tools() {
 
   run persist_save_dir
 
-  [[ "${output}" == "${SAVE}/servers/tiling-test-4-2" ]]
+  [[ "${output}" == "${SAVE}/servers/_tmp_tiling-test-4-2" ]]
+}
+
+@test "dispatcher - save dir keeps the default server's saves at the top level" {
+  # Arrange
+  _socket_path() { printf '%s' "${TMUX_TMPDIR}/tmux-$(id -u)/default"; }
+  mkdir -p "${TMUX_TMPDIR}/tmux-$(id -u)"
+  TMUX_TMPDIR="$(cd "${TMUX_TMPDIR}" && pwd -P)"
+
+  # Act
+  run persist_save_dir
+
+  # Assert
+  [[ "${output}" == "${SAVE}" ]]
+}
+
+@test "dispatcher - save dir scopes a foreign socket named default" {
+  # Arrange
+  _socket_path() { printf '/srv/other/default'; }
+
+  # Act
+  run persist_save_dir
+
+  # Assert
+  [[ "${output}" == "${SAVE}/servers/_srv_other_default" ]]
 }
 
 @test "dispatcher - save dir stays flat when socket scoping is off" {

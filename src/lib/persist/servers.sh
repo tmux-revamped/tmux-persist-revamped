@@ -26,15 +26,20 @@ servers_other_exist() {
   [[ "$(servers_count_from_listing "${1}" "${2}")" -gt 0 ]]
 }
 
-# servers_socket_label PATH -> a safe directory name for a server socket path.
-# tmux names its socket "default" unless -L or -S says otherwise, so every other
-# label identifies a distinct environment. Anything outside the safe set collapses
-# to an underscore, which keeps a socket path from escaping the save directory.
+# servers_socket_label PATH DEFAULT_PATH -> a safe directory name for a server
+# socket path. Only the real default socket DEFAULT_PATH is labelled "default". A
+# socket beside it, named with -L, keeps its base name; any other -S path is
+# labelled from its full path. Anything outside the safe set collapses to an
+# underscore, which keeps a socket path from escaping the save directory.
 servers_socket_label() {
-  local path="${1:-}" base
-  base="${path##*/}"
-  [[ -z "${base}" ]] && base="default"
-  printf '%s' "${base}" | tr -c 'A-Za-z0-9._-' '_'
+  local path="${1:-}" default_path="${2:-}" label
+  if [[ -z "${path}" || "${path}" == "${default_path}" ]]; then
+    printf 'default'
+    return 0
+  fi
+  label="${path}"
+  [[ -n "${default_path}" && "${path%/*}" == "${default_path%/*}" ]] && label="${path##*/}"
+  printf '%s' "${label}" | tr -c 'A-Za-z0-9._-' '_'
 }
 
 # servers_scope_dir BASE LABEL -> where the saves of the server labelled LABEL
