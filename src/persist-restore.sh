@@ -6,7 +6,6 @@ readonly PERSIST_OPT_POST_RESTORE="@persist_revamped_post_restore_hook"
 readonly PERSIST_OPT_REWRITE="@persist_revamped_rewrite_home"
 readonly PERSIST_OPT_VIM_SESSIONS="@persist_revamped_vim_sessions"
 
-# _read_fields LINE -> populate the global FIELDS array with the record's fields.
 _read_fields() {
   FIELDS=()
   local f
@@ -115,13 +114,6 @@ _restored_target() {
   _lookup "${_RESTORE_MAP:-}" "${1}" || printf '%s' "${1}"
 }
 
-# persist_restore [SLOT] [SESSION_FILTER] [PLACEHOLDERS] -> rebuild the session
-# tree from SLOT's file (last.txt by default): create sessions and windows at their
-# saved index, split out extra panes,
-# restore each pane's directory, reapply the layout and zoom, and replay an
-# allow-listed foreground program. SESSION_FILTER, when set, restores only that one
-# session (selective merge). PLACEHOLDERS lists the boot command's empty windows,
-# which are replaced or dropped. Returns non-zero when there is nothing to load.
 persist_restore() {
   local slot="${1:-}" filter="${2:-}" placeholders="${3:-}"
   local dir file line proclist seen=""
@@ -148,10 +140,6 @@ persist_restore() {
     else
       seen="${seen} ${key}"
     fi
-    # Never type into a pane that is not a shell. A restore against a live server
-    # can resolve to a window that already runs a program, and sending keys there
-    # would inject commands into it. Skip the directory, repaint, and program
-    # replay for any such pane.
     is_shell_cmd "$(_pane_current_command "${key}")" || continue
     local rpp="${pp}"
     [[ "${rewrite}" == "on" ]] && rpp="$(transform_rewrite_path "${pp}" "${old_home}" "${new_home}")"
@@ -193,8 +181,6 @@ persist_restore() {
   return 0
 }
 
-# persist_merge SESSION [SLOT] -> restore only SESSION from a save, and never when
-# that session already exists, so a running environment is never clobbered.
 persist_merge() {
   local sess="${1:-}" slot="${2:-}"
   if [[ -z "${sess}" ]]; then

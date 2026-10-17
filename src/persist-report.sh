@@ -2,15 +2,12 @@
 
 readonly PERSIST_OPT_STALE_SECS="@persist_revamped_stale_secs"
 
-# persist_slots -> the names of the saved slots, one per line.
 persist_slots() {
   local dir
   dir="$(persist_save_dir)"
   slots_parse_listing "$(_list_dir "${dir}/slots" '*.txt')"
 }
 
-# persist_pick -> let the user pick a slot through fzf and restore it. Returns
-# non-zero when there are no slots or the pick is cancelled.
 persist_pick() {
   local list choice
   list="$(persist_slots)"
@@ -20,8 +17,6 @@ persist_pick() {
   persist_restore "${choice}"
 }
 
-# persist_preview [SLOT] -> a human summary of what a save holds, without touching
-# the live server. Returns non-zero when the save is missing.
 persist_preview() {
   local slot="${1:-}" dir file content
   dir="$(persist_save_dir)"
@@ -39,9 +34,6 @@ persist_preview() {
   return 0
 }
 
-# persist_verify [SLOT] -> check a save's integrity: it exists, carries a schema
-# header, holds at least one window, and is not stale. Prints findings and returns
-# non-zero when anything is wrong.
 persist_verify() {
   local slot="${1:-}" dir file content windows panes ver ts now max rc=0
   dir="$(persist_save_dir)"
@@ -77,8 +69,6 @@ persist_verify() {
   return "${rc}"
 }
 
-# persist_doctor -> report what the plugin found on this host and why a feature may
-# be inert: tmux and fzf presence, the save directory, and the active lists.
 persist_doctor() {
   local dir
   dir="$(persist_save_dir)"

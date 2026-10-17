@@ -14,7 +14,6 @@ teardown() {
   cleanup_test_environment
 }
 
-# Read persist_split's per-line escaped fields, unescaping each, into SPLIT.
 collect() {
   SPLIT=()
   local f
