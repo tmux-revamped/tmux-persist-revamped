@@ -25,7 +25,7 @@ _tmux_created() {
 }
 
 _window_taken() {
-  command tmux list-windows -t "${1}" -F '#{window_index}' 2>/dev/null | grep -qx "${2}"
+  command tmux list-windows -t "=${1}" -F '#{window_index}' 2>/dev/null | grep -qx "${2}"
 }
 
 _window_alive() {

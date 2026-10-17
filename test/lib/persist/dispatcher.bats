@@ -372,6 +372,36 @@ teardown() {
   _save_body "${BATS_TEST_TMPDIR}/absent" >/dev/null 2>&1 || true
 }
 
+stub_tmux_binary() {
+  local bin="${BATS_TEST_TMPDIR}/tmuxbin"
+  mkdir -p "${bin}"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexit 0\n' "${BATS_TEST_TMPDIR}/tmuxcalls" >"${bin}/tmux"
+  chmod +x "${bin}/tmux"
+  PATH="${bin}:${PATH}"
+}
+
+@test "dispatcher - the session check matches the session name exactly" {
+  # Arrange
+  stub_tmux_binary
+
+  # Act
+  _has_session "work"
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "has-session -t =work" ]]
+}
+
+@test "dispatcher - the window index check lists the exactly named session" {
+  # Arrange
+  stub_tmux_binary
+
+  # Act
+  run _window_taken "work" 1
+
+  # Assert
+  [[ "$(cat "${BATS_TEST_TMPDIR}/tmuxcalls")" == "list-windows -t =work -F #{window_index}" ]]
+}
+
 stub_agent_tools() {
   local bin="${BATS_TEST_TMPDIR}/bin" tool
   mkdir -p "${bin}"
