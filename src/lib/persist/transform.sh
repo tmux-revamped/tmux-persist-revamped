@@ -13,8 +13,8 @@ transform_expand_path() {
     "${tilde}") path="${home}" ;;
     "${tilde}/"*) path="${home}/${path#"${tilde}/"}" ;;
   esac
-  path="${path//\$HOME/${home}}"
-  path="${path//\$HOSTNAME/${host}}"
+  path=${path//"\$HOME"/"${home}"}
+  path=${path//"\$HOSTNAME"/"${host}"}
   printf '%s' "${path}"
 }
 

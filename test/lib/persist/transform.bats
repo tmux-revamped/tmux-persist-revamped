@@ -82,6 +82,17 @@ teardown() {
   [[ "$(transform_expand_path '/state/$HOSTNAME' /home/me box)" == "/state/box" ]]
 }
 
+@test "transform - expand_path keeps an ampersand and a backslash in the substituted values" {
+  # Arrange
+  local home='/Users/R&D\1' host='lab&1'
+
+  # Act
+  run transform_expand_path '$HOME/state/$HOSTNAME' "${home}" "${host}"
+
+  # Assert
+  [ "${output}" = '/Users/R&D\1/state/lab&1' ]
+}
+
 @test "transform - expand_path leaves a plain path alone" {
   [[ "$(transform_expand_path /state/persist /home/me box)" == "/state/persist" ]]
   [[ "$(transform_expand_path "/state/~notahome" /home/me box)" == "/state/~notahome" ]]
