@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-27
+
 ### Fixed
 
+- On bash 5.2 and later, a home directory or host name holding `&` or a
+  backslash came out altered when `$HOME` and `$HOSTNAME` were expanded in
+  `@persist_revamped_dir`. Both are now inserted verbatim.
 - Two config reloads that overlapped could each start an auto-save worker, and
   only one pid was recorded, so the other worker ran for the life of the
   server. A worker now exits once the recorded worker pid no longer names it.

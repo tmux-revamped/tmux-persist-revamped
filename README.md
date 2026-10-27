@@ -8,7 +8,7 @@ English | [日本語](README.ja.md) | [简体中文](README.zh-Hans.md) | [繁�
 
 [![Tests](https://github.com/tmux-revamped/tmux-persist-revamped/actions/workflows/tests.yml/badge.svg)](https://github.com/tmux-revamped/tmux-persist-revamped/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](CHANGELOG.md)
 
 <p align="center">
   <a href="#what-it-does">What it does</a> |
