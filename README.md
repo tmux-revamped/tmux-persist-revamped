@@ -29,7 +29,7 @@ English | [日本語](README.ja.md) | [简体中文](README.zh-Hans.md) | [繁�
 
 ## What it does
 
-A save records every session, window and pane on the server: window names, indexes, layouts and zoom state, the active window and pane, each pane's working directory, and the program it runs. A restore rebuilds that tree, sends each shell pane back to its directory, and starts the program again when it is on the replay list.
+A save records every session, window and pane on the server: window names, indexes, layouts and zoom state, the active window and pane, each pane's working directory, and the program it runs. A restore rebuilds that tree, opens every pane in its saved directory, and starts the program again when it is on the replay list.
 
 The same plugin auto-saves on a timer, keeps a history of saves, parks whole environments in named slots, and can install a login agent so a tmux server, and your restored environment, exist before the first terminal opens.
 
@@ -103,6 +103,7 @@ Set any option in `~/.tmux.conf` before the plugin loads.
 | `@persist_revamped_processes` | empty | Extra programs to replay, added to the built-in list. Each entry is a shell glob |
 | `@persist_revamped_capture_panes` | `off` | `on` saves each pane's visible text and repaints it on restore, with trailing blank lines trimmed |
 | `@persist_revamped_capture_args` | `off` | `on` saves each program's full command line, such as `vim src/app.ts`, and replays it. A line holding a shell metacharacter or a quote replays as the bare program name |
+| `@persist_revamped_ai_resume` | `on` | `on` resumes the AI coding session a pane was running: Claude Code by its exact session id, and Codex, OpenCode, Copilot, Crush, Gemini, Qwen, Amp and Aider by their most recent session. `off` replays them as plain programs |
 | `@persist_revamped_redact` | empty | Extra programs whose pane text is never captured, added to `ssh sudo su vault gpg pass op ssh-add openssl` |
 | `@persist_revamped_restore_on_start` | `off` | `on` restores the last save when the server starts |
 | `@persist_revamped_halt_file` | `<save dir>/no-restore` | While this file exists, restore on start is skipped |
@@ -124,6 +125,8 @@ Set any option in `~/.tmux.conf` before the plugin loads.
 | `@persist_revamped_post_restore_hook` | empty | Shell command run after each restore |
 
 The built-in replay list is `vi vim nvim emacs nano man less more tail top htop btop watch ssh mosh irssi weechat mutt claude codex`. A pane running anything else comes back as a shell in the right directory.
+
+With `@persist_revamped_ai_resume` on, an AI coding tool resumes its session instead of starting a new one. Claude Code returns to the exact session the pane held, read from the record Claude Code keeps for each running process. Codex, OpenCode, Copilot and Crush also accept a session id, but they expose no record that ties a running process to its session, so they resume their most recent session, as Gemini, Qwen, Amp and Aider do. A tool that runs under node, bun, deno or Python is recognized by the script it runs.
 
 ### Internal state
 
@@ -155,7 +158,7 @@ The plugin manages these options itself. Do not set them.
 
 **Safety.** A save never replaces a save that holds windows with one that holds none. A server holds no session while it starts and while it closes its last session, and a save taken then would erase the environment. One save runs at a time, behind a lock directory that a killed save cannot hold for more than two minutes.
 
-**Restoring.** A restore recreates each session and puts every window back at its saved index. When that index is already taken, the window goes to a free one. Each pane that runs a shell gets a `cd` to its directory, and a program on the replay list is started again. Layouts, the active window, the active pane and zoom are applied last.
+**Restoring.** A restore recreates each session and puts every window back at its saved index. When that index is already taken, the window goes to a free one. Every window and pane is created in its saved directory, so no `cd` is typed into any pane. A program on the replay list is started again once the pane's shell is up. Layouts, the active window, the active pane and zoom are applied last.
 
 **Auto-save.** Unless the interval is `0`, loading the plugin starts one background worker per server. It wakes every 60 seconds and saves when the interval has passed. It never writes to `status-right`. It exits when the server stops answering or a newer worker takes over.
 

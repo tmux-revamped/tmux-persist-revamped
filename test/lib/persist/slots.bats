@@ -51,8 +51,13 @@ teardown() {
 }
 
 @test "slots - parse listing returns slot names without the suffix" {
+  # Arrange
   local listing=$'work.txt\nscratch.txt'
+
+  # Act
   run slots_parse_listing "${listing}"
+
+  # Assert
   [[ "${lines[0]}" == "work" ]]
   [[ "${lines[1]}" == "scratch" ]]
 }

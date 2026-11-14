@@ -31,7 +31,7 @@
 
 ## 功能
 
-保存时会记录服务器上的每个会话、窗口和窗格：窗口名称、索引、布局和缩放状态，当前窗口和当前窗格，每个窗格的工作目录，以及其中运行的程序。恢复时会重建这一结构，让每个 shell 窗格回到原来的目录，并重新启动重启列表中的程序。
+保存时会记录服务器上的每个会话、窗口和窗格：窗口名称、索引、布局和缩放状态，当前窗口和当前窗格，每个窗格的工作目录，以及其中运行的程序。恢复时会重建这一结构，在保存的目录中打开每个窗格，并重新启动重启列表中的程序。
 
 同一个插件还会按定时器自动保存、保留保存历史、把整个环境存入命名槽位，并且可以安装登录代理，让 tmux 服务器和已恢复的环境在打开第一个终端之前就已就绪。
 
@@ -111,6 +111,7 @@ set -g @persist_revamped_processes 'lazygit k9s'
 | `@persist_revamped_processes` | 空 | 额外要重新启动的程序，追加到内置列表。每一项都是 shell glob |
 | `@persist_revamped_capture_panes` | `off` | `on` 时保存每个窗格的可见文本，并在恢复时重绘，末尾的空行会被去掉 |
 | `@persist_revamped_capture_args` | `off` | `on` 时保存每个程序的完整命令行，例如 `vim src/app.ts`，并按原样重新运行。含有 shell 元字符或引号的命令行只按程序名重新启动 |
+| `@persist_revamped_ai_resume` | `on` | `on` 时恢复窗格中运行的 AI 编程工具的会话：Claude Code 按确切的会话 ID 恢复，Codex、OpenCode、Copilot、Crush、Gemini、Qwen、Amp 和 Aider 恢复最近的会话。`off` 时按普通程序重新启动 |
 | `@persist_revamped_redact` | 空 | 额外的、绝不捕获其窗格文本的程序，追加到 `ssh sudo su vault gpg pass op ssh-add openssl` |
 | `@persist_revamped_restore_on_start` | `off` | `on` 时在服务器启动时恢复最近一次保存 |
 | `@persist_revamped_halt_file` | `<save dir>/no-restore` | 该文件存在期间，跳过启动时恢复 |
@@ -132,6 +133,8 @@ set -g @persist_revamped_processes 'lazygit k9s'
 | `@persist_revamped_post_restore_hook` | 空 | 每次恢复之后运行的 shell 命令 |
 
 内置的重启列表是 `vi vim nvim emacs nano man less more tail top htop btop watch ssh mosh irssi weechat mutt claude codex`。运行其他程序的窗格会以 shell 的形式回到正确的目录。
+
+`@persist_revamped_ai_resume` 为 `on` 时，AI 编程工具会恢复原来的会话，而不是开始新会话。Claude Code 会根据它为每个运行中的进程保存的记录，回到窗格原来的那个会话。Codex、OpenCode、Copilot 和 Crush 也接受会话 ID，但它们没有公开把运行中的进程与会话对应起来的记录，所以它们与 Gemini、Qwen、Amp 和 Aider 一样恢复最近的会话。在 node、bun、deno 或 Python 下运行的工具按其运行的脚本名识别。
 
 ### 内部状态
 
@@ -167,7 +170,7 @@ set -g @persist_revamped_processes 'lazygit k9s'
 
 **安全。** 含有窗口的保存绝不会被不含窗口的保存替换。服务器在启动期间以及关闭最后一个会话期间没有任何会话，此时的保存会抹掉整个环境。同一时间只运行一次保存，由一个锁目录保护，被强制终止的保存占用该锁不会超过两分钟。
 
-**恢复。** 恢复时重新创建每个会话，并把每个窗口放回保存时的索引。如果该索引已被占用，窗口会放到一个空闲的索引。每个运行 shell 的窗格会收到一条回到其目录的 `cd`，重启列表中的程序会再次启动。布局、当前窗口、当前窗格和缩放最后应用。
+**恢复。** 恢复时重新创建每个会话，并把每个窗口放回保存时的索引。如果该索引已被占用，窗口会放到一个空闲的索引。每个窗口和窗格都直接在保存的目录中创建，因此不会向任何窗格输入 `cd`。重启列表中的程序会在窗格的 shell 启动后再次启动。布局、当前窗口、当前窗格和缩放最后应用。
 
 **自动保存。** 只要间隔不是 `0`，加载插件时就会为每个服务器启动一个后台工作进程。它每 60 秒唤醒一次，间隔已到就保存。它从不写入 `status-right`。服务器不再响应或被更新的工作进程接替时，它就退出。
 

@@ -35,31 +35,36 @@ write_two_window_save() {
 }
 
 @test "restore - replaces the boot window at its saved index instead of appending" {
+  # Arrange
   write_two_window_save
   _has_session() { return 0; }
   _window_taken() { [[ "${2}" == "1" ]]; }
   _window_alive() { return 1; }
 
+  # Act
   persist_restore "" "" $'main:1\t@0' >"${OUT}"
 
+  # Assert
   run cat "${OUT}"
-  [[ "${output}" == *"new-window -k -t main:1 -n alpha"* ]]
-  [[ "${output}" == *"new-window -t main:2 -n beta"* ]]
+  [[ "${output}" == *"new-window -k -t main:1 -n alpha -c /home/u/alpha"* ]]
+  [[ "${output}" == *"new-window -t main:2 -n beta -c /home/u/beta"* ]]
   [[ "${output}" != *"new-window -t main: -n"* ]]
-  [[ "${output}" == *"send-keys -t main:1 cd '/home/u/alpha' Enter"* ]]
-  [[ "${output}" == *"send-keys -t main:2 cd '/home/u/beta' Enter"* ]]
+  [[ "${output}" != *" cd "* ]]
   [[ "${output}" == *"select-window -t main:2"* ]]
   [[ "${output}" != *"kill-window"* ]]
 }
 
 @test "restore - kills a boot window left at an index the save does not use" {
+  # Arrange
   write_two_window_save
   _has_session() { return 0; }
   _window_taken() { [[ "${2}" == "0" ]]; }
   _window_alive() { [[ "${1}" == "@0" ]]; }
 
+  # Act
   persist_restore "" "" $'main:0\t@0' >"${OUT}"
 
+  # Assert
   run cat "${OUT}"
   [[ "${output}" == *"new-window -t main:1 -n alpha"* ]]
   [[ "${output}" == *"kill-window -t @0"* ]]
@@ -78,42 +83,49 @@ write_two_window_save() {
 }
 
 @test "restore - moves a taken index to a free one and sends panes and layout there" {
+  # Arrange
   write_two_window_save
   _has_session() { return 0; }
   _window_taken() { [[ "${2}" == "1" ]]; }
   _tmux_created() { printf 'tmux %s\n' "$*"; _CREATED_INDEX="3"; }
 
+  # Act
   persist_restore >"${OUT}"
 
+  # Assert
   run cat "${OUT}"
-  [[ "${output}" == *"new-window -t main: -n alpha"* ]]
-  [[ "${output}" == *"send-keys -t main:3 cd '/home/u/alpha' Enter"* ]]
+  [[ "${output}" == *"new-window -t main: -n alpha -c /home/u/alpha"* ]]
   [[ "${output}" == *"select-layout -t main:3 lay1"* ]]
   [[ "${output}" == *"select-pane -t main:3.1"* ]]
-  [[ "${output}" == *"send-keys -t main:2 cd '/home/u/beta' Enter"* ]]
+  [[ "${output}" == *"new-window -t main:2 -n beta -c /home/u/beta"* ]]
 }
 
 @test "restore - moves a new session's first window to its saved index" {
+  # Arrange
   write_two_window_save
   _has_session() { return 1; }
   _tmux_created() { printf 'tmux %s\n' "$*"; _CREATED_INDEX="0"; }
 
+  # Act
   persist_restore >"${OUT}"
 
+  # Assert
   run cat "${OUT}"
-  [[ "${output}" == *"new-session -d -s main -n alpha"* ]]
+  [[ "${output}" == *"new-session -d -s main -n alpha -c /home/u/alpha"* ]]
   [[ "${output}" == *"move-window -s main:0 -t main:1"* ]]
-  [[ "${output}" == *"send-keys -t main:1 cd '/home/u/alpha' Enter"* ]]
 }
 
 @test "restore - targets the created index when moving the first window fails" {
+  # Arrange
   persist_join window main 1 alpha 1 lay1 >"${SAVE}/last.txt"
   _has_session() { return 1; }
   _tmux_created() { _CREATED_INDEX="0"; }
   _tmux() { printf 'tmux %s\n' "$*"; [[ "${1}" != "move-window" ]]; }
 
+  # Act
   persist_restore >"${OUT}"
 
+  # Assert
   run cat "${OUT}"
   [[ "${output}" == *"select-layout -t main:0 lay1"* ]]
 }

@@ -254,16 +254,24 @@ teardown() {
 }
 
 @test "features - restore rewrites the home prefix when portable is on" {
+  # Arrange
   mkdir -p "${SAVE}"
   {
+    persist_join window main 0 proj 1 lay0
     persist_join pane main 0 0 1 /home/old/proj bash
+    persist_join pane main 0 1 0 /home/old/proj/docs bash
     persist_join header 1 /home/old 1000
   } >"${SAVE}/last.txt"
   _has_session() { return 1; }
   tmux set-option -gq "@persist_revamped_rewrite_home" "on"
+
+  # Act
   HOME="/home/new" persist_restore >"${BATS_TEST_TMPDIR}/p.txt"
+
+  # Assert
   run cat "${BATS_TEST_TMPDIR}/p.txt"
-  [[ "${output}" == *"send-keys -t main:0 cd '/home/new/proj' Enter"* ]]
+  [[ "${output}" == *"new-session -d -s main -n proj -c /home/new/proj"* ]]
+  [[ "${output}" == *"split-window -t main:0 -c /home/new/proj/docs"* ]]
 }
 
 @test "features - restore opens an editor session when Session.vim exists" {

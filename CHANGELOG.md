@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `@persist_revamped_ai_resume`, on by default, resumes the AI coding session a
+  pane was running. Claude Code comes back in its exact session, read from the
+  record it keeps for each running process. Codex, OpenCode, Copilot, Crush,
+  Gemini, Qwen, Amp and Aider resume their most recent session. A tool running
+  under node, bun, deno or Python is recognized by its script.
+
+### Fixed
+
+- A restore opened panes in the server's starting directory and then typed a
+  `cd` into each one, but only into panes whose shell had already started, so
+  some panes came back in the wrong directory at random. Every window and pane
+  is now created in its saved directory, and nothing is typed to get there.
+- A program on the replay list was skipped when the new pane's shell had not
+  started yet. A restore now waits up to five seconds for the shell before
+  typing into the pane.
+
 ## [1.4.0] - 2026-10-27
 
 ### Fixed

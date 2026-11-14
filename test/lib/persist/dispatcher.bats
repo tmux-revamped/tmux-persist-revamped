@@ -73,6 +73,7 @@ teardown() {
 }
 
 @test "dispatcher - restore recreates session, splits extra panes, replays programs" {
+  # Arrange
   mkdir -p "${SAVE}"
   {
     persist_join window main 0 editor 1 lay0
@@ -81,11 +82,15 @@ teardown() {
     persist_join pane main 0 2 0 /home/u unknownproc
   } >"${SAVE}/last.txt"
   _has_session() { return 1; }
+
+  # Act
   persist_restore >"${BATS_TEST_TMPDIR}/r.txt"
+
+  # Assert
   run cat "${BATS_TEST_TMPDIR}/r.txt"
-  [[ "${output}" == *"new-session -d -s main -n editor"* ]]
-  [[ "${output}" == *"split-window -t main:0"* ]]
-  [[ "${output}" == *"send-keys -t main:0 cd '/home/u' Enter"* ]]
+  [[ "${output}" == *"new-session -d -s main -n editor -c /home/u"* ]]
+  [[ "${output}" == *"split-window -t main:0 -c /home/u"* ]]
+  [[ "${output}" != *"send-keys -t main:0 cd "* ]]
   [[ "${output}" == *vim* ]]
   [[ "${output}" == *htop* ]]
   [[ "${output}" == *"select-layout -t main:0 lay0"* ]]
@@ -93,18 +98,25 @@ teardown() {
   [[ "${output}" == *"select-pane -t main:0.0"* ]]
 }
 
-@test "dispatcher - restore sends a path with spaces as a single word" {
+@test "dispatcher - restore passes a path with spaces as a single argument" {
+  # Arrange
   mkdir -p "${SAVE}"
   {
     persist_join window main 0 editor 1 lay0
     persist_join pane main 0 0 1 "/home/u/my projects/app" bash
+    persist_join pane main 0 1 0 "/home/u/my projects/lib" bash
   } >"${SAVE}/last.txt"
   _has_session() { return 1; }
+  _tmux_created() { printf '%s|' "$@"; printf '\n'; _CREATED_INDEX=""; }
+  _tmux() { printf '%s|' "$@"; printf '\n'; }
 
+  # Act
   persist_restore >"${BATS_TEST_TMPDIR}/r.txt"
 
+  # Assert
   run cat "${BATS_TEST_TMPDIR}/r.txt"
-  [[ "${output}" == *"send-keys -t main:0 cd '/home/u/my projects/app' Enter"* ]]
+  [[ "${output}" == *"new-session|-d|-s|main|-n|editor|-c|/home/u/my projects/app|"* ]]
+  [[ "${output}" == *"split-window|-t|main:0|-c|/home/u/my projects/lib|"* ]]
 }
 
 @test "dispatcher - dump captures stripped pane content when enabled" {
@@ -138,29 +150,64 @@ teardown() {
   [[ "${output}" == *"cat"* ]]
 }
 
-@test "dispatcher - argv_from_forest returns the shell's foreground child" {
+@test "dispatcher - child_from_forest returns the shell's foreground child and its pid" {
+  # Arrange
   local forest=$'1000 1 -bash\n2000 1000 vim src/app.ts\n3000 2000 vim-helper'
-  [[ "$(argv_from_forest "${forest}" 1000)" == "vim src/app.ts" ]]
+
+  # Act
+  local got
+  got="$(child_from_forest "${forest}" 1000)"
+
+  # Assert
+  [[ "${got}" == $'2000\tvim src/app.ts' ]]
 }
 
-@test "dispatcher - argv_from_forest is empty for a bare shell" {
+@test "dispatcher - child_from_forest is empty for a bare shell" {
+  # Arrange
   local forest=$'1000 1 -bash\n2000 1 unrelated'
-  [[ -z "$(argv_from_forest "${forest}" 1000)" ]]
+
+  # Act
+  local got
+  got="$(child_from_forest "${forest}" 1000)"
+
+  # Assert
+  [[ "${got}" == "" ]]
 }
 
-@test "dispatcher - argv_from_forest prefers the newest direct child" {
+@test "dispatcher - child_from_forest prefers the newest direct child" {
+  # Arrange
   local forest=$'1000 1 -zsh\n2000 1000 less file\n2500 1000 htop'
-  [[ "$(argv_from_forest "${forest}" 1000)" == "htop" ]]
+
+  # Act
+  local got
+  got="$(child_from_forest "${forest}" 1000)"
+
+  # Assert
+  [[ "${got}" == $'2500\thtop' ]]
 }
 
-@test "dispatcher - argv_from_forest matches the expected command over a newer sibling" {
+@test "dispatcher - child_from_forest matches the expected command over a newer sibling" {
+  # Arrange
   local forest=$'1000 1 -zsh\n2000 1000 vim notes.md\n2500 1000 sleep 999'
-  [[ "$(argv_from_forest "${forest}" 1000 vim)" == "vim notes.md" ]]
+
+  # Act
+  local got
+  got="$(child_from_forest "${forest}" 1000 vim)"
+
+  # Assert
+  [[ "${got}" == $'2000\tvim notes.md' ]]
 }
 
-@test "dispatcher - argv_from_forest is empty when no child matches the expected command" {
+@test "dispatcher - child_from_forest is empty when no child matches the expected command" {
+  # Arrange
   local forest=$'1000 1 -zsh\n2000 1000 sleep 999'
-  [[ -z "$(argv_from_forest "${forest}" 1000 vim)" ]]
+
+  # Act
+  local got
+  got="$(child_from_forest "${forest}" 1000 vim)"
+
+  # Assert
+  [[ "${got}" == "" ]]
 }
 
 @test "dispatcher - dump captures the full command line when args are enabled" {
@@ -229,12 +276,17 @@ teardown() {
 }
 
 @test "dispatcher - restore types into a shell pane" {
+  # Arrange
   mkdir -p "${SAVE}"
   persist_join pane main 0 0 1 /home/u vim "" "vim src/app.ts" >"${SAVE}/last.txt"
   _has_session() { return 1; }
+
+  # Act
   PERSIST_FAKE_PANE_CMD="bash" persist_restore >"${BATS_TEST_TMPDIR}/keep.txt"
+
+  # Assert
   run cat "${BATS_TEST_TMPDIR}/keep.txt"
-  [[ "${output}" == *"send-keys -t main:0 cd '/home/u' Enter"* ]]
+  [[ "${output}" != *" cd "* ]]
   [[ "${output}" == *"send-keys -t main:0 vim src/app.ts Enter"* ]]
 }
 

@@ -5,6 +5,7 @@ readonly PERSIST_OPT_POST_RESTORE="@persist_revamped_post_restore_hook"
 
 readonly PERSIST_OPT_REWRITE="@persist_revamped_rewrite_home"
 readonly PERSIST_OPT_VIM_SESSIONS="@persist_revamped_vim_sessions"
+readonly PERSIST_SHELL_WAIT_TRIES=50
 
 _read_fields() {
   FIELDS=()
@@ -61,9 +62,15 @@ persist_boot_placeholders() {
   done < <(_list_boot_panes)
 }
 
+_read_dir_args() {
+  DIR_ARGS=()
+  [[ -z "${1}" ]] || DIR_ARGS=(-c "${1}")
+  return 0
+}
+
 _restore_new_session() {
   local s="${1}" wi="${2}" wn="${3}"
-  _tmux_created new-session -d -s "${s}" -n "${wn}"
+  _tmux_created new-session -d -s "${s}" -n "${wn}" ${DIR_ARGS[@]+"${DIR_ARGS[@]}"}
   [[ -n "${_CREATED_INDEX}" && "${_CREATED_INDEX}" != "${wi}" ]] || return 0
   _tmux move-window -s "${s}:${_CREATED_INDEX}" -t "${s}:${wi}" || _LANDED="${s}:${_CREATED_INDEX}"
 }
@@ -71,15 +78,52 @@ _restore_new_session() {
 _restore_window() {
   local s="${1}" wi="${2}" wn="${3}" placeholders="${4}"
   _LANDED="${s}:${wi}"
+  _read_dir_args "${5:-}"
   if ! _has_session "${s}"; then
     _restore_new_session "${s}" "${wi}" "${wn}"
   elif _lookup "${placeholders}" "${s}:${wi}" >/dev/null; then
-    _tmux new-window -k -t "${s}:${wi}" -n "${wn}"
+    _tmux new-window -k -t "${s}:${wi}" -n "${wn}" ${DIR_ARGS[@]+"${DIR_ARGS[@]}"}
   elif ! _window_taken "${s}" "${wi}"; then
-    _tmux new-window -t "${s}:${wi}" -n "${wn}"
+    _tmux new-window -t "${s}:${wi}" -n "${wn}" ${DIR_ARGS[@]+"${DIR_ARGS[@]}"}
   else
-    _tmux_created new-window -t "${s}:" -n "${wn}"
+    _tmux_created new-window -t "${s}:" -n "${wn}" ${DIR_ARGS[@]+"${DIR_ARGS[@]}"}
     [[ -z "${_CREATED_INDEX}" ]] || _LANDED="${s}:${_CREATED_INDEX}"
+  fi
+  return 0
+}
+
+_restore_dirs() {
+  local file="${1}" old_home="${2}" line tab=$'\t'
+  while IFS= read -r line; do
+    [[ "${line}" == pane* ]] || continue
+    _read_fields "${line}"
+    printf '%s:%s%s%s\n' "${FIELDS[1]}" "${FIELDS[2]}" "${tab}" \
+      "$(transform_rewrite_path "${FIELDS[5]}" "${old_home}" "${HOME}")"
+  done <"${file}"
+}
+
+_wait_tick() {
+  [[ -n "${PERSIST_DRY_RUN:-}" ]] || sleep 0.1
+}
+
+_await_shell() {
+  local tries=0
+  while (( tries < PERSIST_SHELL_WAIT_TRIES )); do
+    is_shell_cmd "$(_pane_current_command "${1}")" && return 0
+    tries=$(( tries + 1 ))
+    _wait_tick
+  done
+  return 1
+}
+
+_pane_command() {
+  local pc="${1}" full="${2}" ai_id="${3}" dir="${4}" vim_sessions="${5}" ai_resume="${6}" proclist="${7}"
+  if [[ "${vim_sessions}" == "on" ]] && vimsession_is_editor "${pc}" && _file_exists "${dir}/$(vimsession_file)"; then
+    vimsession_command "${pc}"
+  elif [[ "${ai_resume}" == "on" ]] && aisession_tool "${pc}" >/dev/null; then
+    aisession_command "${pc}" "${ai_id}"
+  elif strategy_match "${pc}" "${proclist}"; then
+    strategy_restore_command "${pc}" "${full}"
   fi
   return 0
 }
@@ -96,13 +140,13 @@ _drop_placeholders() {
 }
 
 _restore_windows() {
-  local file="${1}" filter="${2}" placeholders="${3}" line map="" restored="" tab=$'\t'
+  local file="${1}" filter="${2}" placeholders="${3}" dirs="${4:-}" line map="" restored="" tab=$'\t'
   while IFS= read -r line; do
     [[ "${line}" == window* ]] || continue
     _read_fields "${line}"
     local s="${FIELDS[1]}" wi="${FIELDS[2]}" wn="${FIELDS[3]}"
     transform_keep_session "${s}" "${filter}" || continue
-    _restore_window "${s}" "${wi}" "${wn}" "${placeholders}"
+    _restore_window "${s}" "${wi}" "${wn}" "${placeholders}" "$(_lookup "${dirs}" "${s}:${wi}")"
     map="${map}${s}:${wi}${tab}${_LANDED}"$'\n'
     restored="${restored}${s}"$'\n'
   done <"${file}"
@@ -122,36 +166,31 @@ persist_restore() {
   [[ -f "${file}" ]] || return 1
   proclist="$(persist_proclist)"
   _run_hook "$(get_tmux_option "${PERSIST_OPT_PRE_RESTORE}" "")"
-  local rewrite vim_sessions old_home new_home="${HOME}"
-  rewrite="$(get_tmux_option "${PERSIST_OPT_REWRITE}" "off")"
+  local vim_sessions ai_resume old_home=""
   vim_sessions="$(get_tmux_option "${PERSIST_OPT_VIM_SESSIONS}" "off")"
-  old_home=""
-  [[ "${rewrite}" == "on" ]] && old_home="$(schema_header_field "$(cat "${file}")" 3)"
-  _restore_windows "${file}" "${filter}" "${placeholders}"
+  ai_resume="$(get_tmux_option "${PERSIST_OPT_AI_RESUME}" "on")"
+  [[ "$(get_tmux_option "${PERSIST_OPT_REWRITE}" "off")" == "on" ]] && old_home="$(schema_header_field "$(cat "${file}")" 3)"
+  _restore_windows "${file}" "${filter}" "${placeholders}" "$(_restore_dirs "${file}" "${old_home}")"
   while IFS= read -r line; do
     [[ "${line}" == pane* ]] || continue
     _read_fields "${line}"
-    local s="${FIELDS[1]}" wi="${FIELDS[2]}" pp="${FIELDS[5]}" pc="${FIELDS[6]}"
+    local s="${FIELDS[1]}" wi="${FIELDS[2]}" pc="${FIELDS[6]}" rpp
     transform_keep_session "${s}" "${filter}" || continue
+    rpp="$(transform_rewrite_path "${FIELDS[5]}" "${old_home}" "${HOME}")"
     local key
     key="$(_restored_target "${s}:${wi}")"
     if [[ " ${seen} " == *" ${key} "* ]]; then
-      _tmux split-window -t "${key}"
+      _read_dir_args "${rpp}"
+      _tmux split-window -t "${key}" ${DIR_ARGS[@]+"${DIR_ARGS[@]}"}
     else
       seen="${seen} ${key}"
     fi
-    is_shell_cmd "$(_pane_current_command "${key}")" || continue
-    local rpp="${pp}"
-    [[ "${rewrite}" == "on" ]] && rpp="$(transform_rewrite_path "${pp}" "${old_home}" "${new_home}")"
-    _tmux send-keys -t "${key}" "cd $(transform_shell_quote "${rpp}")" Enter
-    local content="${FIELDS[7]:-}"
+    local content="${FIELDS[7]:-}" cmd
+    cmd="$(_pane_command "${pc}" "${FIELDS[8]:-}" "${FIELDS[9]:-}" "${rpp}" "${vim_sessions}" "${ai_resume}" "${proclist}")"
+    [[ -n "${content}" || -n "${cmd}" ]] || continue
+    _await_shell "${key}" || continue
     [[ -n "${content}" ]] && _repaint_pane "${key}" "${content}"
-    local full="${FIELDS[8]:-}"
-    if [[ "${vim_sessions}" == "on" ]] && vimsession_is_editor "${pc}" && _file_exists "${rpp}/$(vimsession_file)"; then
-      _tmux send-keys -t "${key}" "$(vimsession_command "${pc}")" Enter
-    elif strategy_match "${pc}" "${proclist}"; then
-      _tmux send-keys -t "${key}" "$(strategy_restore_command "${pc}" "${full}")" Enter
-    fi
+    [[ -n "${cmd}" ]] && _tmux send-keys -t "${key}" "${cmd}" Enter
   done <"${file}"
   while IFS= read -r line; do
     [[ "${line}" == window* ]] || continue

@@ -31,7 +31,7 @@
 
 ## 功能
 
-儲存時會記錄伺服器上的每個工作階段、視窗及窗格：視窗名稱、索引、版面配置及縮放狀態，目前的視窗及窗格，每個窗格的工作目錄，以及其中執行的程式。還原時會重建這個結構，讓每個 shell 窗格回到原本的目錄，並重新啟動重啟清單中的程式。
+儲存時會記錄伺服器上的每個工作階段、視窗及窗格：視窗名稱、索引、版面配置及縮放狀態，目前的視窗及窗格，每個窗格的工作目錄，以及其中執行的程式。還原時會重建這個結構，在儲存的目錄中開啟每個窗格，並重新啟動重啟清單中的程式。
 
 同一個插件亦會按計時器自動儲存、保留儲存紀錄、把整個環境存入命名槽位，並可安裝登入代理，讓 tmux 伺服器及已還原的環境在開啟第一個終端機之前已經就緒。
 
@@ -111,6 +111,7 @@ set -g @persist_revamped_processes 'lazygit k9s'
 | `@persist_revamped_processes` | 空 | 額外要重新啟動的程式，加到內置清單之後。每一項都是 shell glob |
 | `@persist_revamped_capture_panes` | `off` | `on` 時儲存每個窗格的可見文字，並在還原時重繪，末尾的空行會被刪去 |
 | `@persist_revamped_capture_args` | `off` | `on` 時儲存每個程式的完整指令行，例如 `vim src/app.ts`，並照樣重新執行。含有 shell 元字元或引號的指令行只按程式名稱重新啟動 |
+| `@persist_revamped_ai_resume` | `on` | `on` 時還原窗格中執行的 AI 編程工具的工作階段：Claude Code 按確切的工作階段 ID 還原，Codex、OpenCode、Copilot、Crush、Gemini、Qwen、Amp 及 Aider 還原最近的工作階段。`off` 時按一般程式重新啟動 |
 | `@persist_revamped_redact` | 空 | 額外的、絕不擷取其窗格文字的程式，加到 `ssh sudo su vault gpg pass op ssh-add openssl` 之後 |
 | `@persist_revamped_restore_on_start` | `off` | `on` 時在伺服器啟動時還原最近一次儲存 |
 | `@persist_revamped_halt_file` | `<save dir>/no-restore` | 此檔案存在期間，略過啟動時還原 |
@@ -132,6 +133,8 @@ set -g @persist_revamped_processes 'lazygit k9s'
 | `@persist_revamped_post_restore_hook` | 空 | 每次還原之後執行的 shell 指令 |
 
 內置的重啟清單是 `vi vim nvim emacs nano man less more tail top htop btop watch ssh mosh irssi weechat mutt claude codex`。執行其他程式的窗格會以 shell 的形式回到正確的目錄。
+
+`@persist_revamped_ai_resume` 為 `on` 時，AI 編程工具會還原原本的工作階段，而不是開始新的工作階段。Claude Code 會根據它為每個執行中的程序保存的記錄，回到窗格原本的那個工作階段。Codex、OpenCode、Copilot 及 Crush 亦接受工作階段 ID，但它們沒有公開把執行中的程序與工作階段對應起來的記錄，所以它們與 Gemini、Qwen、Amp 及 Aider 一樣還原最近的工作階段。在 node、bun、deno 或 Python 下執行的工具按其執行的腳本名稱識別。
 
 ### 內部狀態
 
@@ -167,7 +170,7 @@ set -g @persist_revamped_processes 'lazygit k9s'
 
 **安全。** 含有視窗的儲存絕不會被不含視窗的儲存取代。伺服器在啟動期間以及關閉最後一個工作階段期間沒有任何工作階段，此時的儲存會抹去整個環境。同一時間只會執行一次儲存，由一個鎖定目錄保護，被強制終止的儲存佔用該鎖不會超過兩分鐘。
 
-**還原。** 還原時重新建立每個工作階段，並把每個視窗放回儲存時的索引。如該索引已被佔用，視窗會放到一個空閒的索引。每個執行 shell 的窗格會收到一條回到其目錄的 `cd`，重啟清單中的程式會再次啟動。版面配置、目前視窗、目前窗格及縮放最後套用。
+**還原。** 還原時重新建立每個工作階段，並把每個視窗放回儲存時的索引。如該索引已被佔用，視窗會放到一個空閒的索引。每個視窗及窗格都直接在儲存的目錄中建立，因此不會向任何窗格輸入 `cd`。重啟清單中的程式會在窗格的 shell 啟動後再次啟動。版面配置、目前視窗、目前窗格及縮放最後套用。
 
 **自動儲存。** 只要間隔不是 `0`，載入插件時就會為每個伺服器啟動一個背景工作進程。它每 60 秒喚醒一次，間隔已到就儲存。它從不寫入 `status-right`。伺服器不再回應或被較新的工作進程接手時，它便結束。
 

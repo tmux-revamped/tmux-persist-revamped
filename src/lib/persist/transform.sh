@@ -36,15 +36,6 @@ transform_rewrite_path() {
   return 0
 }
 
-transform_shell_quote() {
-  local rest="${1}" out=""
-  while [[ "${rest}" == *\'* ]]; do
-    out="${out}${rest%%\'*}'\\''"
-    rest="${rest#*\'}"
-  done
-  printf "'%s%s'" "${out}" "${rest}"
-}
-
 transform_is_sensitive() {
   local cmd="${1}" list="${2}" entry
   local -a entries
@@ -66,6 +57,5 @@ transform_keep_session() {
 export -f transform_default_sensitive
 export -f transform_rewrite_path
 export -f transform_expand_path
-export -f transform_shell_quote
 export -f transform_is_sensitive
 export -f transform_keep_session

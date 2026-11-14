@@ -25,6 +25,8 @@ source "${PLUGIN_DIR}/src/lib/persist/event.sh"
 # shellcheck source=/dev/null
 source "${PLUGIN_DIR}/src/lib/persist/vimsession.sh"
 # shellcheck source=/dev/null
+source "${PLUGIN_DIR}/src/lib/persist/aisession.sh"
+# shellcheck source=/dev/null
 source "${PLUGIN_DIR}/src/lib/tmux/tmux-ops.sh"
 # shellcheck source=/dev/null
 source "${PLUGIN_DIR}/src/lib/utils/has-command.sh"
@@ -49,6 +51,7 @@ readonly PERSIST_OPT_BOOT_TS="@persist_revamped_boot_ts"
 readonly PERSIST_OPT_BOOTED="@persist_revamped_booted"
 readonly PERSIST_OPT_CAPTURE="@persist_revamped_capture_panes"
 readonly PERSIST_OPT_CAPTURE_ARGS="@persist_revamped_capture_args"
+readonly PERSIST_OPT_AI_RESUME="@persist_revamped_ai_resume"
 readonly PERSIST_OPT_REDACT="@persist_revamped_redact"
 readonly PERSIST_OPT_BACKUPS="@persist_revamped_backups"
 readonly PERSIST_OPT_EVENT_DEBOUNCE="@persist_revamped_event_debounce"
@@ -176,20 +179,36 @@ _read_ps_forest() {
   fi
 }
 
-argv_from_forest() {
+child_from_forest() {
   local forest="${1}" pid="${2}" expect="${3:-}"
-  local fpid fppid frest base match="" fb="" fbpid=""
+  local fpid fppid frest base match="" mpid="" fb="" fbpid=""
   while read -r fpid fppid frest; do
     [[ "${fppid}" == "${pid}" ]] || continue
     if [[ -z "${fbpid}" ]] || (( fpid > fbpid )); then fbpid="${fpid}"; fb="${frest}"; fi
     if [[ -n "${expect}" && -z "${match}" ]]; then
       base="${frest%% *}"; base="${base##*/}"
-      [[ "${base}" == "${expect}"* ]] && match="${frest}"
+      [[ "${base}" == "${expect}"* ]] && { match="${frest}"; mpid="${fpid}"; }
     fi
   done <<< "${forest}"
-  if [[ -n "${match}" ]]; then printf '%s' "${match}"; return 0; fi
-  if [[ -z "${expect}" && -n "${fb}" ]]; then printf '%s' "${fb}"; return 0; fi
-  echo ""
+  if [[ -n "${match}" ]]; then printf '%s\t%s' "${mpid}" "${match}"; return 0; fi
+  if [[ -z "${expect}" && -n "${fb}" ]]; then printf '%s\t%s' "${fbpid}" "${fb}"; fi
+  return 0
+}
+
+_pane_program() {
+  local forest="${1}" pid="${2}" pc="${3}" capture_args="${4}" ai="${5}" child="" aipid tool
+  _PANE_CMD="${pc}"
+  _PANE_FULL=""
+  _PANE_AI_ID=""
+  [[ -n "${forest}" && -n "${pid}" ]] && child="$(child_from_forest "${forest}" "${pid}" "${pc}")"
+  [[ "${capture_args}" == "on" ]] && _PANE_FULL="${child#*$'\t'}"
+  [[ "${ai}" == "on" ]] || return 0
+  tool="$(aisession_tool "${pc}" "${child#*$'\t'}")" || return 0
+  aipid="${child%%$'\t'*}"
+  [[ -n "${aipid}" ]] || aipid="${pid}"
+  _PANE_CMD="${tool}"
+  _PANE_AI_ID="$(aisession_id "${tool}" "${aipid}")"
+  return 0
 }
 
 _repaint_pane() {
@@ -247,26 +266,28 @@ persist_sensitive_list() {
 }
 
 persist_dump() {
-  local s wi wn wa wl wz pi pa pp pc pid capture capture_args content full forest=""
+  local s wi wn wa wl wz pi pa pp pc pid capture capture_args ai content forest=""
   local redact
   while IFS="${PERSIST_FIELD_SEP}" read -r s wi wn wa wl wz; do
     [[ -n "${s}" ]] && persist_join "window" "${s}" "${wi}" "${wn}" "${wa}" "${wl}" "${wz}"
   done < <(_list_windows)
   capture="$(get_tmux_option "${PERSIST_OPT_CAPTURE}" "off")"
   capture_args="$(get_tmux_option "${PERSIST_OPT_CAPTURE_ARGS}" "off")"
+  ai="$(get_tmux_option "${PERSIST_OPT_AI_RESUME}" "on")"
   redact="$(persist_sensitive_list)"
-  [[ "${capture_args}" == "on" ]] && forest="$(_read_ps_forest)"
+  [[ "${capture_args}" == "on" || "${ai}" == "on" ]] && forest="$(_read_ps_forest)"
   while IFS="${PERSIST_FIELD_SEP}" read -r s wi pi pa pp pc pid; do
     [[ -n "${s}" ]] || continue
     content=""
     if [[ "${capture}" == "on" ]] && ! transform_is_sensitive "${pc}" "${redact}"; then
       content="$(persist_strip_trailing_blanks "$(_capture_pane "${s}:${wi}.${pi}")")"
     fi
-    full=""
-    if [[ "${capture_args}" == "on" && -n "${pid}" ]]; then
-      full="$(argv_from_forest "${forest}" "${pid}" "${pc}")"
+    _pane_program "${forest}" "${pid}" "${pc}" "${capture_args}" "${ai}"
+    if [[ -n "${_PANE_AI_ID}" ]]; then
+      persist_join "pane" "${s}" "${wi}" "${pi}" "${pa}" "${pp}" "${_PANE_CMD}" "${content}" "${_PANE_FULL}" "${_PANE_AI_ID}"
+    else
+      persist_join "pane" "${s}" "${wi}" "${pi}" "${pa}" "${pp}" "${_PANE_CMD}" "${content}" "${_PANE_FULL}"
     fi
-    persist_join "pane" "${s}" "${wi}" "${pi}" "${pa}" "${pp}" "${pc}" "${content}" "${full}"
   done < <(_list_panes)
   persist_join "header" "${PERSIST_SCHEMA_VERSION}" "${HOME}" "$(_now)"
 }
