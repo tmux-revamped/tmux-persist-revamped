@@ -1,51 +1,69 @@
-# Working in this repository
+# tmux-persist-revamped
 
-This repository is one member of the tmux-revamped family. Read [`FAMILY.md`](FAMILY.md) before changing anything. It is the contract, it is identical in every member, and it overrides any habit that contradicts it.
+Guidance for anyone, human or agent, changing tmux-persist-revamped. What it is and how to use it lives in [README.md](README.md).
 
-## Before you finish a bug fix
+[FAMILY.md](FAMILY.md) holds everything this plugin shares with the rest of the tmux-revamped family, and it is the same in every member. This file holds only what is exclusive to tmux-persist-revamped, under the same headings as the agent guide of every member. Read both before changing anything; a rule that would serve the other members goes into [`FAMILY.md`](FAMILY.md) instead of here.
 
-A bug found in one member is a bug hunted in all of them. This is the rule this family exists to enforce, and the one most easily skipped, because the fix in front of you looks complete once the local test passes.
+## Layout
 
-Classify the defect before closing it:
+| Path | Holds |
+|:-----|:------|
+| [`persist-revamped.tmux`](persist-revamped.tmux) | The entry point TPM runs |
+| [`src/persist.sh`](src/persist.sh) | The script the keys, popups and the auto-save worker call. It sources the three below |
+| [`src/persist-boot.sh`](src/persist-boot.sh) | The login agent: install, uninstall and sync |
+| [`src/persist-report.sh`](src/persist-report.sh) | Slots, the picker, preview, verify and doctor |
+| [`src/persist-restore.sh`](src/persist-restore.sh) | Restore and merge |
+| [`src/lib/persist/`](src/lib/persist) | This member's modules |
+| [`src/lib/utils/constants.sh`](src/lib/utils/constants.sh) | This member's constants, including its version |
+| [`src/lib/utils/`](src/lib/utils), [`src/lib/tmux/`](src/lib/tmux) | The shared library. Every file there except `constants.sh` is owned by the family |
+| [`test/`](test) | The bats suite. `helpers.bash` and `tmux_helpers.bash` are owned; this member's own mocks go in the `_local` files |
+| [`family/`](family) | The family tooling, owned |
 
-- **Shared**, meaning it lives in an `owned` file. Fix once, then `family/bin/propagate`.
-- **Systemic**, meaning it lives in a pattern other members could repeat: a bash assumption, a tmux behavior, a shell idiom, an operating-system difference, an entrypoint convention, an option or key convention, or anything that was copied between members. Run `family/bin/sweep`, fix every affected member, in this session.
-- **Local**, meaning it lives in this plugin's own feature code and no other member can express it. Say in the pull request why that is true.
+## Names
 
-Systemic is the default. Claiming local requires a reason, and "it looks specific to this plugin" is not one.
+- Settings are tmux options named `@persist_revamped_<setting>`.
+- It has no status placeholders.
+- Public functions carry `persist_`; private ones start with `_`.
+- The version constant is `PERSIST_REVAMPED_VERSION`.
+- Its command-line tool, once it exists, is `persist-revamped`.
 
-```
-family/bin/sweep --pattern '<regex>' --label '<defect>'
-family/bin/sweep --script <probe> --label '<defect>'
-```
+## Behaviour
 
-Use a probe rather than a pattern whenever the defect was found by running something, because a pattern finds the spelling and a probe finds the behavior. A member the sweep could not check is reported as not checked and fails the run. Not checked is never clean.
+- Saves every session, window and pane, saves on a timer, and restores it all after a reboot.
+- `C-s` saves and `C-r` restores.
+- A save reads the server with `list-windows -a` and `list-panes -a`, writes one escaped record per window and pane to a temporary file, and moves it into `history/` under a timestamped name; the slot is a symlink to the newest file.
+- Unless the interval is `0`, loading the plugin starts one background worker per server that wakes every 60 seconds and saves when the interval has passed.
 
-## Before you finish anything
+## Domain rules
 
-```
-family/bin/audit          # this member against the contract, offline
-make lint                 # shellcheck, zero warnings
-make test                 # full bats suite
-make coverage             # the coverage floor
-```
+- A save never replaces a save that holds windows with one that holds none, because a server holds no session while it starts and while it closes its last one.
+- A save identical to the previous one is dropped, and files beyond `@persist_revamped_backups` are deleted.
+- A restore puts every window back at its saved index, or a free one when it is taken, and creates every pane in its saved directory, so no `cd` is typed into a pane.
+- Only the default socket saves at the top of the save directory; a server started with `-L name` saves under `servers/name/`.
+- The halt file stops restore on start until it is deleted.
 
-All four gate on their exit code. Read the output rather than the exit code alone when a test runner is involved, because failures print before the summary.
+## Release
 
-## Never
+- `PERSIST_REVAMPED_VERSION` in [`src/lib/utils/constants.sh`](src/lib/utils/constants.sh) holds the version. It must equal the newest versioned heading in [`CHANGELOG.md`](CHANGELOG.md) and the README's version badge, which the `version` job in `tests.yml` checks.
+- A push to `main` whose version has no tag yet makes the `release` job in `tests.yml` tag `vX.Y.Z` and publish a GitHub release with that changelog section.
+- Unreleased changes sit under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) until a release is cut.
 
-- Edit an `owned` file in more than one repository. Change it here, then propagate.
-- Add a difference between members without recording it in `family/EXCEPTIONS.md` with a retirement condition.
-- Use bash 4 syntax outside a version guard that actually stops execution. TPM runs the entrypoint through `run-shell`, so `return` at file scope is an error and does not stop anything. macOS still ships bash 3.2 as `/bin/bash`.
-- Write a tmux option outside the `@<plugin>_revamped_<name>` grammar.
-- Claim a key another member already claims. `family/bin/doctor` reports the collisions.
+## Gaps against FAMILY.md
 
-## Where things are
+As of 2026-11-15:
 
-| Path | What it is |
-|---|---|
-| [`FAMILY.md`](FAMILY.md) | The contract. Ownership classes, the sweep obligation, the exception process |
-| `family/OWNERSHIP` | Which files are shared and how strictly |
-| `family/KEYS.md` | The key allocation policy and the tiers. The table itself is still being filled in, member by member |
-| `family/docs/collisions.md` | The conflicts that exist today |
-| `family/bin/` | The tooling the contract is enforced with |
+- Every script is bash, under `#!/usr/bin/env bash`, not POSIX `sh`, so it is untested under `dash`, `zsh` and BusyBox `sh`.
+- The code lives in [`src/`](src) and [`src/lib/`](src/lib); there is no `bin/persist-revamped`, `lib/state.sh` or `lib/core.sh`.
+- No `persist-revamped` command with `help`, `version` and `doctor` in the family's form, no man page, no completions and no `manifest.json`.
+- No gum interface: no `lib/ui.sh`, `lib/table.awk`, themes or `test/bin/gum`.
+- No `screens/` and no recordings in the README.
+- The README sections are not the family's order of Quick start, Usage, topic sections, Portability, Development and License.
+- Coverage is kcov with a 95 percent floor on Linux, not bashcov at 100 percent merged from macOS and Linux.
+- CI tests GNU, BSD and uutils tools in `tests.yml`, but not the six toolsets through `.github/scripts/toolset.sh`, and no shell matrix under `sh`, `dash`, `bash` and `zsh`.
+- No golden transcripts, `call.sh`, `run-matrix.sh` or `linux-container.sh`.
+- The version is written by hand and released by `tests.yml`; there is no semantic-release, `package.json`, `release.yml` with `recover`, `bot-merge.yml` or Renovate.
+- CI is `tests.yml`, `family.yml` and `security.yml`, not `ci.yml`, and no job starts with `step-security/harden-runner`.
+- The pull request template, `labeler.yml`, `pr.yml` and `stale.yml` are still present.
+- No `.editorconfig`, `.yamllint.yml`, `scripts/check-names.sh` or shfmt; the Makefile has `help`, `test`, `test-unit`, `coverage`, `lint` and `clean`, not the family's targets.
+- Saves are serialized by a lock directory, where FAMILY.md requires a `set -C` lock file.
+- No `@persist_revamped_notify` for a failed save yet.
