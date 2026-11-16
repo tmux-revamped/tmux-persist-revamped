@@ -4,11 +4,11 @@
 _PERSIST_REVAMPED_FORMAT_LOADED=1
 
 persist_escape() {
-  printf '%s' "${1}" | LC_ALL=C awk '{gsub(/\\/,"\\\\"); gsub(/\t/,"\\t")} NR>1{printf "%s","\\n"} {printf "%s",$0}'
+  printf '%s' "${1}" | LC_ALL=C awk '{ out = ""; for (i = 1; i <= length($0); i++) { c = substr($0, i, 1); if (c == "\\") { out = out "\\\\" } else if (c == "\t") { out = out "\\t" } else { out = out c } } if (NR > 1) { printf "%s", "\\n" } printf "%s", out }'
 }
 
 persist_unescape() {
-  printf '%s' "${1}" | LC_ALL=C awk '{gsub(/\\\\/,"\001"); gsub(/\\t/,"\t"); gsub(/\\n/,"\n"); gsub(/\001/,"\\"); printf "%s",$0}'
+  printf '%s' "${1}" | LC_ALL=C awk '{ out = ""; n = length($0); for (i = 1; i <= n; i++) { c = substr($0, i, 1); d = substr($0, i + 1, 1); if (c != "\\" || i == n) { out = out c } else if (d == "\\") { out = out "\\"; i++ } else if (d == "t") { out = out "\t"; i++ } else if (d == "n") { out = out "\n"; i++ } else { out = out c } } printf "%s", out }'
 }
 
 persist_join() {
