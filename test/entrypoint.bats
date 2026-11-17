@@ -15,8 +15,9 @@ teardown() {
   local worker
   worker="$(command tmux -S "${SOCKET}" show-option -gqv '@persist_revamped_worker_pid' 2>/dev/null)"
   [[ -n "${worker}" ]] && kill "${worker}" 2>/dev/null
+  command tmux -S "${SOCKET}-host" kill-server 2>/dev/null || true
   command tmux -S "${SOCKET}" kill-server 2>/dev/null || true
-  rm -f "${SOCKET}" 2>/dev/null || true
+  rm -f "${SOCKET}" "${SOCKET}-host" 2>/dev/null || true
 }
 
 process_running() {
@@ -195,4 +196,76 @@ run_entry() {
   run command tmux -S "${SOCKET}" list-keys -T prefix
   [[ "${output}" == *"persist.sh' save"* ]] || false
   [[ "${output}" != *"persist.sh' pick"* ]]
+}
+
+wait_for() {
+  local delay
+  for delay in 0.01 0.02 0.05 0.1 0.1 0.2 0.2 0.5 0.5 1 1 1 2 2; do
+    "$@" && return 0
+    sleep "${delay}"
+  done
+  "$@"
+}
+
+attached() {
+  local clients
+  clients=$(command tmux -S "${SOCKET}" list-clients -F x 2>/dev/null)
+  [[ -n "${clients}" ]]
+}
+
+called_with() {
+  grep -qx -- "$1" "${BATS_TEST_TMPDIR}/calls" 2>/dev/null
+}
+
+odd_checkout() {
+  local copy="${BATS_TEST_TMPDIR}/it's #S dir" quoted hash="#"
+  mkdir -p "${copy}/src"
+  cp -f "${ENTRY}" "${copy}/"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >>"%s"\n' "${BATS_TEST_TMPDIR}/calls" >"${copy}/src/persist.sh"
+  printf -v quoted '%q' "${copy}/persist-revamped.tmux"
+  ODD_LOAD="bash ${quoted//"${hash}"/"${hash}${hash}"}"
+}
+
+@test "entry point - its keys and boot calls run from a checkout path with a space, a quote and a hash" {
+  # Arrange
+  local host="${SOCKET}-host"
+  odd_checkout
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_interval' '0'
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_pick_key' 'P'
+  command tmux -S "${host}" -f /dev/null new-session -d -s host -x 120 -y 30 \
+    "env -u TMUX TERM=xterm-256color tmux -S '${SOCKET}' attach-session -t test"
+  wait_for attached
+
+  # Act
+  command tmux -S "${SOCKET}" run-shell "${ODD_LOAD}"
+
+  # Assert
+  wait_for called_with boot-sync
+  wait_for called_with boot
+  command tmux -S "${host}" send-keys -t host C-b C-s
+  wait_for called_with save
+  command tmux -S "${host}" send-keys -t host C-b C-r
+  wait_for called_with restore
+  command tmux -S "${host}" send-keys -t host C-b P
+  wait_for called_with pick
+}
+
+@test "entry point - a second load from such a path adds no second event hook, and the hook runs" {
+  # Arrange
+  local hooks
+  odd_checkout
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_interval' '0'
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_event_debounce' '5'
+  command tmux -S "${SOCKET}" new-window -d -t test:
+  command tmux -S "${SOCKET}" run-shell "${ODD_LOAD}"
+
+  # Act
+  command tmux -S "${SOCKET}" run-shell "${ODD_LOAD}"
+
+  # Assert
+  hooks=$(command tmux -S "${SOCKET}" show-hooks -g window-unlinked)
+  run grep -c "persist.sh" <<<"${hooks}"
+  [[ "${output}" == "1" ]] || false
+  command tmux -S "${SOCKET}" kill-window -t test:1
+  wait_for called_with event
 }

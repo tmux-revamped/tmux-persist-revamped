@@ -9,25 +9,50 @@ opt() {
   printf '%s' "${v:-${2}}"
 }
 
+hash_free() {
+  local rest="${1}" out="" char
+  while [[ -n "${rest}" ]]; do
+    char="${rest:0:1}"
+    rest="${rest:1}"
+    case "${char}" in
+      "'") out+="'\\''" ;;
+      "#") out+="'\"\$(printf '%b' '\\0043')\"'" ;;
+      *) out+="${char}" ;;
+    esac
+  done
+  printf "'%s'" "${out}"
+}
+
+tmux_quote() {
+  local rest="${1}" out=""
+  while [[ "${rest}" == *\'* ]]; do
+    out+="${rest%%\'*}'\\''"
+    rest="${rest#*\'}"
+  done
+  printf "'%s%s'" "${out}" "${rest}"
+}
+
+RUN="bash $(hash_free "${DISPATCH}")"
+
 save_key="$(opt '@persist_revamped_save_key' 'C-s')"
 restore_key="$(opt '@persist_revamped_restore_key' 'C-r')"
 
-tmux bind-key "${save_key}" run-shell "bash '${DISPATCH}' save"
-tmux bind-key "${restore_key}" run-shell "bash '${DISPATCH}' restore"
+tmux bind-key "${save_key}" run-shell "${RUN} save"
+tmux bind-key "${restore_key}" run-shell "${RUN} restore"
 
 pick_key="$(opt '@persist_revamped_pick_key' '')"
 if [[ -n "${pick_key}" ]]; then
-  tmux bind-key "${pick_key}" display-popup -E "bash '${DISPATCH}' pick"
+  tmux bind-key "${pick_key}" display-popup -E "${RUN} pick"
 fi
 
-tmux run-shell -b "bash '${DISPATCH}' boot-sync"
+tmux run-shell -b "${RUN} boot-sync"
 
-tmux run-shell -b "bash '${DISPATCH}' boot"
+tmux run-shell -b "${RUN} boot"
 
 own_hook_indices() {
   local line idx
   tmux show-hooks -g "${1}" 2>/dev/null | while IFS= read -r line; do
-    [[ "${line}" == *"${DISPATCH}"* ]] || continue
+    [[ "${line}" == *"/src/persist.sh' event"* ]] || continue
     idx="${line%%\]*}"
     printf '%s\n' "${idx#*\[}"
   done
@@ -37,7 +62,7 @@ event_debounce="$(opt '@persist_revamped_event_debounce' '0')"
 for hook in session-closed window-unlinked; do
   if [[ "${event_debounce}" =~ ^[0-9]+$ ]] && (( event_debounce > 0 )); then
     [[ -n "$(own_hook_indices "${hook}")" ]] ||
-      tmux set-hook -ga "${hook}" "run-shell -b \"bash '${DISPATCH}' event\""
+      tmux set-hook -ga "${hook}" "run-shell -b $(tmux_quote "${RUN} event")"
   else
     own_hook_indices "${hook}" | while IFS= read -r index; do
       tmux set-hook -gu "${hook}[${index}]"

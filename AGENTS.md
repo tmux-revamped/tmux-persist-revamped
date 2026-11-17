@@ -65,5 +65,4 @@ As of 2026-11-16:
 - No `.editorconfig`, `.yamllint.yml` or shfmt; the Makefile has `help`, `test`, `test-unit`, `coverage`, `lint` and `clean`, not the family's targets.
 - Saves are serialized by a lock directory, where FAMILY.md requires a `set -C` lock file.
 - No `@persist_revamped_notify` for a failed save yet.
-- No test presses its keys through a real client attached from a second tmux.
-- The picker key's popup command names the dispatcher path in plain single quotes, which leaves a `#` in a popup's command when the checkout path holds one; that runs on tmux 3.6 and 3.8, which expand no format there, and is not the hash-free form.
+- The real-client test presses the save, restore and picker keys against a stand-in dispatcher, so it checks the command each key runs, not a save or a restore.
