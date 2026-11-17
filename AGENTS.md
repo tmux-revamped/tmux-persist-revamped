@@ -66,3 +66,4 @@ As of 2026-11-17:
 - No `.editorconfig`, `.yamllint.yml` or shfmt; the Makefile has `help`, `test`, `test-unit`, `coverage`, `lint` and `clean`, not the family's targets.
 - Saves are serialized by a lock directory, where FAMILY.md requires a `set -C` lock file.
 - No `@persist_revamped_notify` for a failed save yet.
+- `get_tmux_option` keeps a tmux option set to nothing as an empty value, where FAMILY.md has it mean the default; the ticker's own reader already takes the default.
