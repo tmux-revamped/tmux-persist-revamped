@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-17
+
+### Fixed
+
+- A checkout path holding a quote or a `#` broke the keys, the boot calls and
+  the event hook, because the entry point wrote the path into each tmux
+  command in plain single quotes. It now escapes a quote and writes each `#`
+  through `printf '%b'`, so the path reads the same in `run-shell`, a hook
+  and the picker popup on every tmux version.
+
 ## [1.5.0] - 2026-11-15
 
 ### Added
