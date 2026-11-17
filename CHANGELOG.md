@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-11-17
+
+### Fixed
+
+- A restore opened a window or a pane in the wrong folder when the saved
+  folder's path held a `#` that tmux reads as a format, such as `#S`. The
+  folder is now handed to tmux with each `#` doubled.
+
 ## [1.5.1] - 2026-11-17
 
 ### Fixed
