@@ -51,6 +51,7 @@ Guidance for anyone, human or agent, changing tmux-persist-revamped. What it is 
 
 As of 2026-11-17:
 
+- The Linux containers of CI install no `lsof`, and the descriptor test in [`test/entrypoint.bats`](test/entrypoint.bats) skips without it.
 - Every script is bash, under `#!/usr/bin/env bash`, not POSIX `sh`, so it is untested under `dash`, `zsh` and BusyBox `sh`.
 - The code lives in [`src/`](src) and [`src/lib/`](src/lib); there is no `bin/persist-revamped`, `lib/state.sh` or `lib/core.sh`.
 - No `persist-revamped` command with `help`, `version` and `doctor` in the family's form, no man page, no completions and no `manifest.json`.
