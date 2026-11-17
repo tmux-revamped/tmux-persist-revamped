@@ -338,6 +338,10 @@ saved() {
   wait_for has_window second
 }
 
+server_gone() {
+  ! command tmux -S "${SOCKET}" list-sessions >/dev/null 2>&1
+}
+
 host_shows() {
   local screen
   screen="$(command tmux -S "${SOCKET}-host" capture-pane -p -t host)"
@@ -370,6 +374,7 @@ host_lacks() {
   printf '#!/bin/sh\nhead -n 1\n' >"${stubs}/fzf"
   chmod +x "${stubs}/fzf"
   command tmux -S "${SOCKET}" kill-server
+  wait_for server_gone
   PATH="${stubs}:${PATH}" command tmux -S "${SOCKET}" -f /dev/null new-session -d -s test
   command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_pick_key' 'P'
   real_host
