@@ -63,9 +63,14 @@ persist_boot_placeholders() {
 }
 
 _read_dir_args() {
+  local rest="${1}" out="" hash="#"
   DIR_ARGS=()
-  [[ -z "${1}" ]] || DIR_ARGS=(-c "${1}")
-  return 0
+  [[ -n "${rest}" ]] || return 0
+  while [[ "${rest}" == *"${hash}"* ]]; do
+    out+="${rest%%"${hash}"*}${hash}${hash}"
+    rest="${rest#*"${hash}"}"
+  done
+  DIR_ARGS=(-c "${out}${rest}")
 }
 
 _restore_new_session() {

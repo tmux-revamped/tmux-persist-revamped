@@ -22,6 +22,8 @@ setup() {
 }
 
 teardown() {
+  [[ -z "${PERSIST_DIR_SOCKET:-}" ]] || command tmux -S "${PERSIST_DIR_SOCKET}" kill-server 2>/dev/null || true
+  [[ -z "${PERSIST_DIR_SOCKET:-}" ]] || rm -f "${PERSIST_DIR_SOCKET}"
   cleanup_test_environment
 }
 
@@ -167,4 +169,36 @@ write_two_window_save() {
   persist_boot
 
   [[ "${got}" == $'main:1\t@0' ]]
+}
+
+@test "restore - a saved folder holding a hash tmux reads as a format is where the window starts" {
+  # Arrange
+  local folder="${BATS_TEST_TMPDIR}/it's #S dir" real now delay
+  PERSIST_DIR_SOCKET="/tmp/persist-dir-${BASHPID}-${RANDOM}"
+  mkdir -p "${folder}" "${BATS_TEST_TMPDIR}/home"
+  real="$(cd "${folder}" && pwd -P)"
+  HOME="${BATS_TEST_TMPDIR}/home" command tmux -S "${PERSIST_DIR_SOCKET}" -f /dev/null new-session -d -s base /bin/sh
+
+  # Act
+  _read_dir_args "${folder}"
+
+  # Assert
+  command tmux -S "${PERSIST_DIR_SOCKET}" new-window -d -n probe "${DIR_ARGS[@]}" /bin/sh
+  for delay in 0.01 0.05 0.1 0.2 0.5 1 2; do
+    now="$(command tmux -S "${PERSIST_DIR_SOCKET}" display-message -p -t probe '#{pane_current_path}')"
+    [[ "${now}" == "${real}" ]] && break
+    sleep "${delay}"
+  done
+  [[ "${now}" == "${real}" ]]
+}
+
+@test "restore - no saved folder means no start directory" {
+  # Arrange
+  local folder=""
+
+  # Act
+  _read_dir_args "${folder}"
+
+  # Assert
+  [[ "${#DIR_ARGS[@]}" -eq 0 ]]
 }
