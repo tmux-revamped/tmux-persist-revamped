@@ -218,12 +218,13 @@ called_with() {
 }
 
 odd_checkout() {
-  local copy="${BATS_TEST_TMPDIR}/it's #S dir" quoted hash="#"
+  local copy="${BATS_TEST_TMPDIR}/it's #S dir" quoted
   mkdir -p "${copy}/src"
   cp -f "${ENTRY}" "${copy}/"
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >>"%s"\n' "${BATS_TEST_TMPDIR}/calls" >"${copy}/src/persist.sh"
   printf -v quoted '%q' "${copy}/persist-revamped.tmux"
-  ODD_LOAD="bash ${quoted//"${hash}"/"${hash}${hash}"}"
+  quoted="$(printf '%s\n' "${quoted}" | sed 's/#/##/g')"
+  ODD_LOAD="bash ${quoted}"
 }
 
 @test "entry point - its keys and boot calls run from a checkout path with a space, a quote and a hash" {
