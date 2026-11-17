@@ -85,10 +85,10 @@ set -g @persist_revamped_processes 'lazygit k9s'
 | 指令 | 作用 |
 |:--------|:-------|
 | `save [slot]` | 立即儲存，指定槽位名稱時儲存到該槽位 |
-| `restore [slot]` | 還原最近一次儲存，或還原指定槽位 |
+| `restore [slot]` | 還原最近一次儲存，或還原指定槽位；沒有儲存時以一則 tmux 訊息說明 |
 | `merge <session> [slot]` | 只還原一個工作階段，而且只在沒有同名工作階段時還原 |
 | `slots` | 列出命名槽位 |
-| `pick` | 用 fzf 選擇一個命名槽位並還原 |
+| `pick` | 用 fzf 選擇一個命名槽位並還原；沒有槽位或沒有 fzf 時會說明 |
 | `preview [slot]` | 顯示儲存的路徑、結構版本、來源主目錄，以及視窗及窗格數目 |
 | `verify [slot]` | 檢查結構標頭、紀錄數目及儲存的時長 |
 | `doctor` | 報告儲存目錄、找到的工具、停止檔案及登入代理 |

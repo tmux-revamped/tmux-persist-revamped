@@ -8,11 +8,23 @@ persist_slots() {
   slots_parse_listing "$(_list_dir "${dir}/slots" '*.txt')"
 }
 
+_persist_pick_stop() {
+  printf 'persist-revamped: %s\n' "${1}" >&2
+  [[ -t 0 ]] || return 0
+  read -r _
+}
+
 persist_pick() {
   local list choice
   list="$(persist_slots)"
-  [[ -n "${list}" ]] || return 1
-  choice="$(printf '%s\n' "${list}" | _fzf)" || return 1
+  if [[ -z "${list}" ]]; then
+    _persist_pick_stop "no named slot is saved yet. save one with: save NAME"
+    return 1
+  fi
+  if ! choice="$(printf '%s\n' "${list}" | _fzf)"; then
+    has_command fzf || _persist_pick_stop "fzf is not installed, and the picker needs it"
+    return 1
+  fi
   [[ -n "${choice}" ]] || return 1
   persist_restore "${choice}"
 }

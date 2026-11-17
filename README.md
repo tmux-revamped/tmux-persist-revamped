@@ -79,10 +79,10 @@ Every action is also a command. Run it as `bash ~/.tmux/plugins/tmux-persist-rev
 | Command | Action |
 |:--------|:-------|
 | `save [slot]` | Save now, into a named slot when one is given |
-| `restore [slot]` | Restore the last save, or a named slot |
+| `restore [slot]` | Restore the last save, or a named slot; with nothing saved it says so in a tmux message |
 | `merge <session> [slot]` | Restore one session, only when no session of that name exists |
 | `slots` | List the named slots |
-| `pick` | Choose a named slot with fzf and restore it |
+| `pick` | Choose a named slot with fzf and restore it; with no slot saved, or without fzf, it says so |
 | `preview [slot]` | Print the save's path, schema, origin home, and window and pane counts |
 | `verify [slot]` | Check the schema header, the record counts and the save's age |
 | `doctor` | Report the save directory, the tools found, the halt file and the login agent |

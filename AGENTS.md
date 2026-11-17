@@ -29,7 +29,7 @@ Guidance for anyone, human or agent, changing tmux-persist-revamped. What it is 
 ## Behaviour
 
 - Saves every session, window and pane, saves on a timer, and restores it all after a reboot.
-- `C-s` saves and `C-r` restores.
+- `C-s` saves and `C-r` restores. A restore with nothing saved says so in a tmux message and exits 0, so the key never ends in tmux's `returned 1` screen; a restore that fails with a save present still exits 1. The picker says why it cannot pick, with no slot saved or without fzf, and in its popup waits for Enter. [`test/entrypoint.bats`](test/entrypoint.bats) presses the three keys against the real plugin through a second tmux attached to a private server.
 - A save reads the server with `list-windows -a` and `list-panes -a`, writes one escaped record per window and pane to a temporary file, and moves it into `history/` under a timestamped name; the slot is a symlink to the newest file.
 - Unless the interval is `0`, loading the plugin starts one background worker per server that wakes every 60 seconds and saves when the interval has passed.
 
@@ -49,7 +49,7 @@ Guidance for anyone, human or agent, changing tmux-persist-revamped. What it is 
 
 ## Gaps against FAMILY.md
 
-As of 2026-11-16:
+As of 2026-11-17:
 
 - Every script is bash, under `#!/usr/bin/env bash`, not POSIX `sh`, so it is untested under `dash`, `zsh` and BusyBox `sh`.
 - The code lives in [`src/`](src) and [`src/lib/`](src/lib); there is no `bin/persist-revamped`, `lib/state.sh` or `lib/core.sh`.
@@ -65,4 +65,3 @@ As of 2026-11-16:
 - No `.editorconfig`, `.yamllint.yml` or shfmt; the Makefile has `help`, `test`, `test-unit`, `coverage`, `lint` and `clean`, not the family's targets.
 - Saves are serialized by a lock directory, where FAMILY.md requires a `set -C` lock file.
 - No `@persist_revamped_notify` for a failed save yet.
-- The real-client test presses the save, restore and picker keys against a stand-in dispatcher, so it checks the command each key runs, not a save or a restore.

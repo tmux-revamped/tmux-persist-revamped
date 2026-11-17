@@ -418,10 +418,18 @@ persist_boot() {
   set_tmux_option "${PERSIST_OPT_BOOT_TS}" "$(_now)"
 }
 
+persist_restore_command() {
+  local file
+  persist_restore "$@" && return 0
+  file="$(slots_file "$(persist_save_dir)" "${1:-}")"
+  [[ -f "${file}" ]] && return 1
+  _tmux display-message "persist-revamped: nothing saved to restore"
+}
+
 persist_main() {
   case "${1:-}" in
     save) shift; persist_save "$@" ;;
-    restore) shift; persist_restore "$@" ;;
+    restore) shift; persist_restore_command "$@" ;;
     merge) shift; persist_merge "$@" ;;
     auto) persist_auto ;;
     boot) persist_boot ;;

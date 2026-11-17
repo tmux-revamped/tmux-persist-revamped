@@ -85,10 +85,10 @@ set -g @persist_revamped_processes 'lazygit k9s'
 | 命令 | 作用 |
 |:--------|:-------|
 | `save [slot]` | 立即保存，指定槽位名时保存到该槽位 |
-| `restore [slot]` | 恢复最近一次保存，或恢复指定槽位 |
+| `restore [slot]` | 恢复最近一次保存，或恢复指定槽位；没有保存时用一条 tmux 消息说明 |
 | `merge <session> [slot]` | 只恢复一个会话，且仅在不存在同名会话时恢复 |
 | `slots` | 列出命名槽位 |
-| `pick` | 用 fzf 选择一个命名槽位并恢复 |
+| `pick` | 用 fzf 选择一个命名槽位并恢复；没有槽位或没有 fzf 时会说明 |
 | `preview [slot]` | 显示保存的路径、模式版本、来源主目录，以及窗口和窗格数量 |
 | `verify [slot]` | 检查模式头、记录数量和保存的时长 |
 | `doctor` | 报告保存目录、找到的工具、停止文件和登录代理 |

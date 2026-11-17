@@ -270,3 +270,120 @@ odd_checkout() {
   command tmux -S "${SOCKET}" kill-window -t test:1
   wait_for called_with event
 }
+
+real_host() {
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_interval' '0'
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_dir' "${BATS_TEST_TMPDIR}/saves"
+  command tmux -S "${SOCKET}" set-option -g default-command "env PS1='$ ' sh"
+  command tmux -S "${SOCKET}-host" -f /dev/null new-session -d -s host -x 120 -y 30 \
+    "env -u TMUX TERM=xterm-256color tmux -S '${SOCKET}' attach-session -t test"
+  wait_for attached
+  run_entry
+}
+
+has_window() {
+  local now
+  now="$(command tmux -S "${SOCKET}" list-windows -a -F '#{window_name}' | tr '\n' ' ')"
+  [[ " ${now}" == *" $1 "* ]]
+}
+
+lacks_window() {
+  ! has_window "$1"
+}
+
+said() {
+  local messages
+  messages="$(command tmux -S "${SOCKET}" show-messages)"
+  [[ "${messages}" == *"$1"* ]]
+}
+
+saved() {
+  local file
+  for file in "${BATS_TEST_TMPDIR}/saves"/servers/*/*; do
+    [[ -f "${file}" && -s "${file}" ]] && return 0
+  done
+  return 1
+}
+
+@test "keys - prefix C-r with nothing saved says so in a message, not in a raw error screen" {
+  # Arrange
+  real_host
+
+  # Act
+  command tmux -S "${SOCKET}-host" send-keys -t host C-b
+  command tmux -S "${SOCKET}-host" send-keys -t host C-r
+
+  # Assert
+  wait_for said "persist-revamped: nothing saved to restore"
+  run command tmux -S "${SOCKET}" display-message -p -t test '#{pane_mode}'
+  [[ "${output}" == "" ]]
+}
+
+@test "keys - prefix C-s saves every window, and prefix C-r brings back one that was closed" {
+  # Arrange
+  real_host
+  command tmux -S "${SOCKET}" rename-window -t test:0 first
+  command tmux -S "${SOCKET}" new-window -d -t test: -n second
+  command tmux -S "${SOCKET}-host" send-keys -t host C-b
+  command tmux -S "${SOCKET}-host" send-keys -t host C-s
+  wait_for saved
+  command tmux -S "${SOCKET}" kill-window -t test:second
+  wait_for lacks_window second
+
+  # Act
+  command tmux -S "${SOCKET}-host" send-keys -t host C-b
+  command tmux -S "${SOCKET}-host" send-keys -t host C-r
+
+  # Assert
+  wait_for has_window second
+}
+
+host_shows() {
+  local screen
+  screen="$(command tmux -S "${SOCKET}-host" capture-pane -p -t host)"
+  [[ "${screen}" == *"$1"* ]]
+}
+
+host_lacks() {
+  ! host_shows "$1"
+}
+
+@test "keys - the picker key with no slot saved says so and waits for Enter" {
+  # Arrange
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_pick_key' 'P'
+  real_host
+
+  # Act
+  command tmux -S "${SOCKET}-host" send-keys -t host C-b
+  command tmux -S "${SOCKET}-host" send-keys -t host P
+
+  # Assert
+  wait_for host_shows "persist-revamped: no named slot is saved yet"
+  command tmux -S "${SOCKET}-host" send-keys -t host Enter
+  wait_for host_lacks "persist-revamped: no named slot is saved yet"
+}
+
+@test "keys - the picker key restores the slot chosen in fzf" {
+  # Arrange
+  local stubs="${BATS_TEST_TMPDIR}/stubs" quoted
+  mkdir -p "${stubs}"
+  printf '#!/bin/sh\nhead -n 1\n' >"${stubs}/fzf"
+  chmod +x "${stubs}/fzf"
+  command tmux -S "${SOCKET}" kill-server
+  PATH="${stubs}:${PATH}" command tmux -S "${SOCKET}" -f /dev/null new-session -d -s test
+  command tmux -S "${SOCKET}" set-option -gq '@persist_revamped_pick_key' 'P'
+  real_host
+  command tmux -S "${SOCKET}" rename-window -t test:0 first
+  command tmux -S "${SOCKET}" new-window -d -t test: -n second
+  printf -v quoted '%q' "${PLUGIN_DIR}/src/persist.sh"
+  command tmux -S "${SOCKET}" run-shell "bash ${quoted} save work"
+  command tmux -S "${SOCKET}" kill-window -t test:second
+  wait_for lacks_window second
+
+  # Act
+  command tmux -S "${SOCKET}-host" send-keys -t host C-b
+  command tmux -S "${SOCKET}-host" send-keys -t host P
+
+  # Assert
+  wait_for has_window second
+}

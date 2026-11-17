@@ -800,3 +800,42 @@ teardown() {
   # Assert
   [ "$(wc -l <"${BATS_TEST_TMPDIR}/loads" | tr -d ' ')" -eq 2 ]
 }
+
+@test "features - pick with no slot says so instead of closing in silence" {
+  # Arrange
+  _list_dir() { :; }
+
+  # Act
+  run persist_pick
+
+  # Assert
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" == "persist-revamped: no named slot is saved yet. save one with: save NAME" ]]
+}
+
+@test "features - pick without fzf names it" {
+  # Arrange
+  _list_dir() { printf 'work.txt\n'; }
+  has_command() { return 1; }
+
+  # Act
+  run persist_pick
+
+  # Assert
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" == "persist-revamped: fzf is not installed, and the picker needs it" ]]
+}
+
+@test "features - a cancelled picker says nothing when fzf is installed" {
+  # Arrange
+  _list_dir() { printf 'work.txt\n'; }
+  _fzf() { cat >/dev/null; return 1; }
+  has_command() { return 0; }
+
+  # Act
+  run persist_pick
+
+  # Assert
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" == "" ]]
+}

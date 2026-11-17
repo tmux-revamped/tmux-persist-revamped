@@ -809,3 +809,30 @@ stub_agent_tools() {
   [ "${status}" -eq 0 ]
   [ ! -d "${SAVE}/.save.lock" ]
 }
+
+@test "dispatcher - restore with nothing saved says so and succeeds, so a key shows no raw error" {
+  # Arrange
+  unset PERSIST_DRY_RUN
+  _tmux() { printf '%s\n' "$*" >>"${BATS_TEST_TMPDIR}/said"; }
+
+  # Act
+  run persist_main restore
+
+  # Assert
+  [[ "${status}" -eq 0 ]]
+  [[ "$(<"${BATS_TEST_TMPDIR}/said")" == "display-message persist-revamped: nothing saved to restore" ]]
+}
+
+@test "dispatcher - a restore that fails with a save present still fails" {
+  # Arrange
+  persist_restore() { return 1; }
+  mkdir -p "${SAVE}"
+  : >"$(slots_file "${SAVE}" "")"
+
+  # Act
+  run persist_main restore
+
+  # Assert
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" == "" ]]
+}
