@@ -190,6 +190,8 @@ set -g @persist_revamped_processes 'lazygit k9s'
 | `make lint` | 对所有 shell 文件运行 shellcheck |
 | `make coverage` | 用 kcov 测量行覆盖率，低于 95% 时失败，在 Linux 上运行 |
 
+在 macOS 上，运行 `brew bundle` 会根据 [`Brewfile`](Brewfile) 安装这些目标用到的所有工具。
+
 测试套件需要 `bats-core` 和 tmux。
 
 ## 许可证
