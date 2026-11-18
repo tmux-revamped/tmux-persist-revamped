@@ -1,19 +1,5 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-### Fixed
-
-- `prefix + C-r` with nothing saved ended in tmux's raw `returned 1` screen. It
-  now says `persist-revamped: nothing saved to restore` in a message.
-- The slot picker's popup closed in silence when no slot was saved or `fzf` was
-  missing. It now says which, and waits for Enter.
-
 ## [1.5.2] - 2026-11-17
 
 ### Fixed
