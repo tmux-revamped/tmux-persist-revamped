@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/tmux-revamped/tmux-persist-revamped/compare/v1.5.2...v1.5.3) (2026-11-19)
+
+
+### Bug Fixes
+
+* say why restore and the picker do nothing ([d4e9e89](https://github.com/tmux-revamped/tmux-persist-revamped/commit/d4e9e89b9c89d3b1c2f301bd5f1c7f9b34ff1a8e))
+
 ## [1.5.2] - 2026-11-17
 
 ### Fixed
